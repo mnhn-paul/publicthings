@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Specimen Scanner Kiosk</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
+    <!-- ZXing Library -->
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f4f4;
+        }
+
+        /* SCAN SCREEN */
+        #scanScreen {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #scanScreen h1 {
+            font-size: 60px;
+            margin-bottom: 50px;
+        }
+
+        #scanInput {
+            width: 600px;
+            padding: 25px;
+            font-size: 45px;
+            text-align: center;
+            border-radius: 10px;
+            border: 2px solid #555;
+        }
+
+        #toggleScanner {
+            margin-top: 20px;
+            font-size: 24px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            background: #555;
+            color: white;
+            cursor: pointer;
+        }
+
+        #scannerContainer {
+            display: none;
+            width: 100%;
+            height: 50vh;
+            background: #000;
+            margin: 20px 0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        /* RECORD SCREEN */
+        #recordScreen {
+            display: none;
+            width: 100%;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* LEFT SIDE */
+        .left {
+            width: 40%;
+            padding: 30px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        /* RIGHT SIDE */
+        .right {
+            width: 60%;
+            padding: 30px;
+            box-sizing: border-box;
+        }
+
+        #scientificName {
+            font-size: 42px;
+            margin-bottom: 20px;
+        }
+
+        #specimenImage {
+            max-width: 90%;
+            max-height: 45vh;
+            object-fit: contain;
+        }
+
+        .info {
+            font-size: 28px;
+            margin: 15px 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 55vh;
+            margin-top: 20px;
+        }
+
+        button {
+            margin-top: 30px;
+            font-size: 30px;
+            padding: 20px 50px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- SCAN PAGE -->
+    <div id="scanScreen">
+        <h1>Scan specimen</h1>
+        <input id="scanInput" placeholder="Scan barcode..." autocomplete="off">
+        <button id="toggleScanner">📷 Use Camera Scanner</button>
+        <div id="scannerContainer"></div>
+    </div>
+
+    <!-- RECORD PAGE -->
+    <div id="recordScreen">
+        <div class="container">
+            <div class="left">
+                <h1 id="scientificName"></h1>
+                <img id="specimenImage">
+                <div class="info" id="commonName"></div>
+                <div class="info" id="date"></div>
+                <button onclick="backToScanner()">⬅ Scan another specimen</button>
+            </div>
+            <div class="right">
+                <div class="info" id="collector"></div>
+                <div class="info" id="institution"></div>
+                <div class="info" id="country"></div>
+                <div class="info" id="locality"></div>
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+        const input = document.getElementById("scanInput");
+        const scanScreen = document.getElementById("scanScreen");
+        const recordScreen = document.getElementById("recordScreen");
+        const toggleScannerButton = document.getElementById("toggleScanner");
+        const scannerContainer = document.getElementById("scannerContainer");
+
+        let timer = null;
+        let map = null;
+        let codeReader = null;
+
+        const records = {
+            "MNHNL139839": "https://api.gbif.org/v1/occurrence/6361687449",
+            "MNHNL139832": "https://api.gbif.org/v1/occurrence/3947579709",
+            "MNHNL177024": "https://api.gbif.org/v1/occurrence/6362204441"
+        };
+
+        input.addEventListener("keydown", function(event) {
+            if (event.key === "Enter") {
+                let barcode = input.value.trim();
+                input.value = "";
+                if (records[barcode]) {
+                    loadRecord(records[barcode]);
+                } else {
+                    alert("No specimen found: " + barcode);
+                    input.focus();
+                }
+            }
+        });
+
+        toggleScannerButton.addEventListener("click", async () => {
+            if (scannerContainer.style.display === "none") {
+                scannerContainer.style.display = "block";
+                toggleScannerButton.textContent = "📝 Stop Scanner";
+                startScanner();
+            } else {
+                scannerContainer.style.display = "none";
+                toggleScannerButton.textContent = "📷 Use Camera Scanner";
+                stopScanner();
+            }
+        });
+
+        async function startScanner() {
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            try {
+                await codeReader.decodeFromVideoDevice(
+                    undefined,
+                    scannerContainer,
+                    (result, err) => {
+                        if (result) {
+                            const barcode = result.getText();
+                            if (records[barcode]) {
+                                loadRecord(records[barcode]);
+                            } else {
+                                alert("No specimen found: " + barcode);
+                            }
+                            stopScanner();
+                        }
+                        if (err && !(err instanceof ZXing.NotFoundException)) {
+                            console.error(err);
+                            stopScanner();
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error("Error accessing camera:", error);
+                alert("Could not access the camera. Ensure permissions are granted.");
+            }
+        }
+
+        function stopScanner() {
+            if (codeReader) {
+                codeReader.reset();
+                scannerContainer.style.display = "none";
+                toggleScannerButton.textContent = "📷 Use Camera Scanner";
+            }
+        }
+
+        async function loadRecord(url) {
+            let response = await fetch(url);
+            let data = await response.json();
+
+            scanScreen.style.display = "none";
+            recordScreen.style.display = "block";
+
+            document.getElementById("scientificName").innerHTML = data.scientificName || "Unknown specimen";
+            document.getElementById("commonName").innerHTML = "Common name: " + (data.vernacularName || "-");
+            document.getElementById("date").innerHTML = "Collected: " + (data.eventDate || "-");
+            document.getElementById("collector").innerHTML = "Collector: " + (data.recordedBy || "-");
+            document.getElementById("institution").innerHTML = "Collection: " + (data.institutionCode || "-");
+            document.getElementById("country").innerHTML = "Country: " + (data.country || "-");
+            document.getElementById("locality").innerHTML = "Locality: " + (data.locality || "-");
+
+            let image = document.getElementById("specimenImage");
+            image.src = "";
+            if (data.media && data.media.length > 0) {
+                image.src = data.media[0].identifier;
+            }
+
+            if (data.decimalLatitude && data.decimalLongitude) {
+                showMap(data.decimalLatitude, data.decimalLongitude);
+            }
+
+            startTimer();
+        }
+
+        function showMap(lat, lon) {
+            if (map) {
+                map.remove();
+            }
+            map = L.map("map").setView([lat, lon], 8);
+            L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: "&copy; OpenStreetMap contributors",
+                maxZoom: 19
+            }).addTo(map);
+            L.marker([lat, lon]).addTo(map);
+        }
+
+        function startTimer() {
+            clearTimeout(timer);
+            timer = setTimeout(backToScanner, 10000);
+        }
+
+        function backToScanner() {
+            clearTimeout(timer);
+            recordScreen.style.display = "none";
+            scanScreen.style.display = "flex";
+            if (map) {
+                map.remove();
+                map = null;
+            }
+            document.getElementById("specimenImage").src = "";
+            input.focus();
+        }
+
+        window.onload = function() {
+            input.focus();
+        };
+
+        document.onclick = function() {
+            input.focus();
+        };
+    </script>
+</body>
+</html>
