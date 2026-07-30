@@ -48,6 +48,7 @@
 
         #toggleScanner {
             margin-top: 20px;
+            
             font-size: 24px;
             padding: 10px 20px;
             border-radius: 10px;
@@ -201,33 +202,34 @@
             }
         });
 
-        async function startScanner() {
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            try {
-                await codeReader.decodeFromVideoDevice(
-                    undefined,
-                    scannerContainer,
-                    (result, err) => {
-                        if (result) {
-                            const barcode = result.getText();
-                            if (records[barcode]) {
-                                loadRecord(records[barcode]);
-                            } else {
-                                alert("No specimen found: " + barcode);
-                            }
-                            stopScanner();
-                        }
-                        if (err && !(err instanceof ZXing.NotFoundException)) {
-                            console.error(err);
-                            stopScanner();
-                        }
+async function startScanner() {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    try {
+        await codeReader.decodeFromVideoDevice(
+            { facingMode: 'environment' }, // Use rear camera
+            scannerContainer,
+            (result, err) => {
+                if (result) {
+                    const barcode = result.getText();
+                    if (records[barcode]) {
+                        loadRecord(records[barcode]);
+                    } else {
+                        alert("No specimen found: " + barcode);
                     }
-                );
-            } catch (error) {
-                console.error("Error accessing camera:", error);
-                alert("Could not access the camera. Ensure permissions are granted.");
+                    stopScanner();
+                }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error(err);
+                    stopScanner();
+                }
             }
-        }
+        );
+    } catch (error) {
+        console.error("Error accessing camera:", error);
+        alert("Could not access the camera. Ensure permissions are granted and try again.");
+    }
+}
+
 
         function stopScanner() {
             if (codeReader) {
