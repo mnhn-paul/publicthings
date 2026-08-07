@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>GBIF ↔ IPT Dataset Monitor</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+h1 {
+    margin-bottom: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    vertical-align: top;
+}
+
+th {
+    background: #f3f3f3;
+    cursor: pointer;
+    user-select: none;
+}
+
+th:hover {
+    background: #eaeaea;
+}
+
+/* IPT-based coloring ONLY */
+.green { background: #e7ffe7; }
+.yellow { background: #fff9d6; }
+.orange { background: #ffe8cc; }
+.red { background: #ffe5e5; }
+
+.small {
+    font-size: 12px;
+    color: #666;
+}
+
+#download-btn {
+    margin-bottom: 10px;
+    padding: 8px 16px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#download-btn:hover {
+    background: #45a049;
+}
+</style>
+</head>
+
+<body>
+
+<h1>GBIF ↔ IPT Dataset Monitor</h1>
+
+<button id="download-btn">Download CSV</button>
+<div id="status">Loading...</div>
+
+<table>
+<thead>
+<tr>
+    <th data-key="title">Dataset</th>
+    <th data-key="gbif">GBIF</th>
+    <th data-key="ipt">IPT Edit</th>
+    <th data-key="created">Created</th>
+    <th data-key="modified">GBIF Updated</th>
+    <th data-key="pubDate">IPT Published</th>
+    <th data-key="ingest">Last Ingest</th>
+    <th data-key="sync">Sync Status</th>
+</tr>
+</thead>
+
+<tbody id="body"></tbody>
+</table>
+
+<script>
+
+const ORG =
+"75642970-f855-11dd-8235-b8a03c50a862";
+
+const IPT_BASE =
+"https://ipt.mnhn.lu/ipt/";
+
+let rows = [];
+let sortState = { key: null, asc: true };
+
+function days(d) {
+    if (!d) return null;
+    return Math.floor((Date.now() - new Date(d)) / 86400000);
+}
+
+function fmt(d) {
+    return d ? new Date(d).toLocaleString() : "";
+}
+
+function extractResourceId(url) {
+    if (!url) return null;
+    const m = url.match(/r=([^&]+)/);
+    return m ? m[1] : null;
+}
+
+function getIPT(ds) {
+    const sources = [
+        ...(ds.identifiers || []),
+        ...(ds.endpoints || [])
+    ];
+
+    for (const s of sources) {
+        const url = s.identifier || s.url;
+        const id = extractResourceId(url);
+
+        if (id) {
+            return `${IPT_BASE}resource?r=${id}`;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * IPT-based row color (ONLY pubDate)
+ */
+function rowColor(pubDate) {
+    const age = days(pubDate);
+
+    if (age === null) return "";
+
+    if (age <= 7) return "green";
+    if (age <= 30) return "yellow";
+    if (age <= 60) return "orange";
+
+    return "red";
+}
+
+function syncStatus(ds) {
+    const ingest = ds.dwca?.modified || ds.modified;
+    const pub = ds.pubDate;
+
+    const ingestAge = days(ingest);
+    const pubAge = days(pub);
+
+    if (ingestAge !== null && ingestAge <= 7) {
+        return "🟢 Fully synced";
+    }
+
+    if (pubAge !== null && ingestAge !== null && pubAge < ingestAge) {
+        return "🟠 IPT ahead";
+    }
+
+    if (ingestAge !== null && ingestAge > 30) {
+        return "🔴 Stale";
+    }
+
+    return "🟡 Lagging";
+}
+
+async function fetchAll() {
+    let out = [];
+    let offset = 0;
+    const limit = 100;
+
+    while (true) {
+        const url =
+        `https://api.gbif.org/v1/dataset/search?publishing_org=${ORG}&limit=${limit}&offset=${offset}`;
+
+        const res = await fetch(url);
+        const json = await res.json();
+
+        out.push(...json.results);
+
+        if (json.endOfRecords) break;
+
+        offset += limit;
+    }
+
+    return out;
+}
+
+/**
+ * Render table
+ */
+function render() {
+    const tbody = document.getElementById("body");
+    tbody.innerHTML = "";
+
+    rows.forEach(r => {
+        const tr = document.createElement("tr");
+
+        tr.className = rowColor(r.pubDate);
+
+        tr.innerHTML = `
+            <td>${r.title}</td>
+
+            <td>
+                <a target="_blank" href="${r.gbif}">
+                    GBIF
+                </a>
+            </td>
+
+            <td>
+                ${r.ipt ? `<a target="_blank" href="${r.ipt}">Edit</a>` : "—"}
+            </td>
+
+            <td>${fmt(r.created)}</td>
+            <td>${fmt(r.modified)}</td>
+            <td>${fmt(r.pubDate)}</td>
+            <td>${fmt(r.ingest)}</td>
+            <td>${r.sync}</td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+/**
+ * Sorting logic (FIXED)
+ */
+function sortBy(key) {
+    const asc =
+        sortState.key === key ? !sortState.asc : true;
+
+    sortState = { key, asc };
+
+    rows.sort((a, b) => {
+        let x = a[key];
+        let y = b[key];
+
+        // handle dates
+        if (key === "created" ||
+            key === "modified" ||
+            key === "pubDate" ||
+            key === "ingest") {
+
+            x = x ? new Date(x).getTime() : 0;
+            y = y ? new Date(y).getTime() : 0;
+
+            return asc ? x - y : y - x;
+        }
+
+        // handle strings
+        x = (x || "").toString();
+        y = (y || "").toString();
+
+        return asc
+            ? x.localeCompare(y)
+            : y.localeCompare(x);
+    });
+
+    render();
+}
+
+function attachSorting() {
+    document.querySelectorAll("th").forEach(th => {
+        th.addEventListener("click", () => {
+            sortBy(th.dataset.key);
+        });
+    });
+}
+
+/**
+ * Download CSV
+ */
+function downloadCSV() {
+    const headers = [
+        "Dataset Title",
+        "GBIF URL",
+        "GBIF Dataset Key",
+        "IPT URL",
+        "IPT Resource ID",
+        "Created",
+        "GBIF Updated",
+        "IPT Published",
+        "Last Ingest",
+        "Sync Status"
+    ];
+
+    const csvRows = [];
+    csvRows.push(headers.join(","));
+
+    rows.forEach(row => {
+        const gbifKey = row.gbif.split("/").pop();
+        const iptResourceId = row.ipt ? extractResourceId(row.ipt) : "—";
+        const values = [
+            `"${row.title.replace(/"/g, '""')}"`,
+            `"${row.gbif}"`,
+            `"${gbifKey}"`,
+            `"${row.ipt || "—"}"`,
+            `"${iptResourceId}"`,
+            `"${fmt(row.created)}"`,
+            `"${fmt(row.modified)}"`,
+            `"${fmt(row.pubDate)}"`,
+            `"${fmt(row.ingest)}"`,
+            `"${row.sync}"`
+        ];
+        csvRows.push(values.join(","));
+    });
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "gbif_ipt_datasets.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function run() {
+    const status = document.getElementById("status");
+    const downloadBtn = document.getElementById("download-btn");
+
+    downloadBtn.addEventListener("click", downloadCSV);
+
+    const base = await fetchAll();
+
+    status.innerText = `Loading ${base.length} datasets...`;
+
+    const full = await Promise.all(
+        base.map(d =>
+            fetch(`https://api.gbif.org/v1/dataset/${d.key}`)
+                .then(r => r.json())
+                .catch(() => null)
+        )
+    );
+
+    rows = full.filter(Boolean).map(d => {
+        const ingest = d.dwca?.modified || d.modified;
+
+        return {
+            title: d.title,
+            gbif: `https://www.gbif.org/dataset/${d.key}`,
+            ipt: getIPT(d),
+
+            created: d.created,
+            modified: d.modified,
+            pubDate: d.pubDate,
+            ingest,
+
+            sync: syncStatus(d)
+        };
+    });
+
+    render();
+    attachSorting();
+
+    status.innerText = `Loaded ${rows.length} datasets`;
+}
+
+run();
+
+</script>
+
+</body>
+</html>
