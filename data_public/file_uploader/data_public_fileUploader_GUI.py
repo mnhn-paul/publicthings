@@ -9,7 +9,6 @@ import threading
 from uuid import uuid4
 from pathlib import Path
 from typing import Dict, Union
-from io import BytesIO
 
 
 # =====================================================
@@ -35,19 +34,17 @@ SUPPORTED_FORMATS = {
     "PNG": "image/png",
     "HTML": "text/html",
     "ZIP": "application/zip",
-    "OTHER": "other",
+    "OTHER": "application/octet-stream",
     "URL": "url"
 }
 
 
-# Required columns in the CSV/Excel input file
 REQUIRED_COLUMNS = [
     "dataset_id",
     "operation_type"
 ]
 
 
-# Optional columns that may be present
 OPTIONAL_COLUMNS = [
     "file_path",
     "url",
@@ -56,6 +53,10 @@ OPTIONAL_COLUMNS = [
     "title",
     "description"
 ]
+
+
+# Chunk size: 10 MB
+CHUNK_SIZE = 10 * 1024 * 1024
 
 
 logging.basicConfig(
@@ -71,6 +72,7 @@ logging.basicConfig(
 def clean(value):
     """
     Convert pandas/Excel values into clean strings.
+
     Empty cells become empty strings.
     """
 
@@ -196,19 +198,7 @@ def resolve_file_path(
     Combine the filename from the Excel/CSV file
     with the Data Folder selected in the GUI.
 
-    IMPORTANT:
-    Only the filename is used.
-
-    Example:
-
-        Excel:
-            data.csv
-
-        Data Folder:
-            C:\\MyData
-
-        Result:
-            C:\\MyData\\data.csv
+    Only the filename itself is used.
     """
 
     file_name = clean(file_name)
@@ -219,17 +209,6 @@ def resolve_file_path(
     data_folder = os.path.abspath(
         data_folder
     )
-
-    # Only use the filename itself.
-    # This means even if the Excel contains:
-    #
-    # C:\SomeOtherFolder\data.csv
-    #
-    # or:
-    #
-    # ../../data.csv
-    #
-    # only "data.csv" will be used.
 
     safe_filename = os.path.basename(
         file_name
@@ -249,7 +228,8 @@ class UdataUploader:
 
     def __init__(
         self,
-        api_token: str
+        api_token: str,
+        progress_callback=None
     ):
 
         self.session = requests.Session()
@@ -260,6 +240,40 @@ class UdataUploader:
         })
 
         self.report_data = []
+
+        # Optional callback used by the GUI.
+        #
+        # callback(current, total, message)
+        #
+        self.progress_callback = progress_callback
+
+
+    # =================================================
+    # Progress reporting
+    # =================================================
+
+    def report_progress(
+        self,
+        current,
+        total,
+        message=""
+    ):
+
+        logging.info(message)
+
+        if self.progress_callback:
+
+            try:
+                self.progress_callback(
+                    current,
+                    total,
+                    message
+                )
+
+            except Exception:
+                logging.exception(
+                    "Progress callback failed"
+                )
 
 
     # =================================================
@@ -390,6 +404,71 @@ class UdataUploader:
 
 
     # =================================================
+    # Safely parse JSON response
+    # =================================================
+
+    def parse_json_response(
+        self,
+        response
+    ):
+
+        try:
+
+            return response.json()
+
+        except ValueError:
+
+            return {
+                "raw_response": response.text
+            }
+
+
+    # =================================================
+    # Extract resource ID
+    # =================================================
+
+    def extract_resource_id(
+        self,
+        response_data
+    ):
+
+        if not isinstance(
+            response_data,
+            dict
+        ):
+
+            return None
+
+        # Most common uData response
+        resource_id = response_data.get(
+            "id"
+        )
+
+        if resource_id:
+            return resource_id
+
+        # Some API responses may wrap the
+        # resource object.
+        resource = response_data.get(
+            "resource"
+        )
+
+        if isinstance(
+            resource,
+            dict
+        ):
+
+            resource_id = resource.get(
+                "id"
+            )
+
+            if resource_id:
+                return resource_id
+
+        return None
+
+
+    # =================================================
     # Upload file
     # =================================================
 
@@ -420,6 +499,16 @@ class UdataUploader:
                 )
             }
 
+        if not file_path.is_file():
+
+            return {
+                "status": "error",
+                "error": (
+                    f"Path is not a file: "
+                    f"{file_path}"
+                )
+            }
+
         # ---------------------------------------------
         # Determine MIME type
         # ---------------------------------------------
@@ -441,17 +530,18 @@ class UdataUploader:
         )
 
         # ---------------------------------------------
-        # Chunk settings
+        # File information
         # ---------------------------------------------
-
-        chunk_size = 10 * 1024 * 1024  # 10 MB
 
         file_size = os.path.getsize(
             file_path
         )
 
-        parts = math.ceil(
-            file_size / chunk_size
+        parts = max(
+            1,
+            math.ceil(
+                file_size / CHUNK_SIZE
+            )
         )
 
         upload_uuid = str(
@@ -459,16 +549,36 @@ class UdataUploader:
         )
 
         logging.info(
-            "Uploading file %s in %d parts",
-            file_path.name,
+            "Uploading file '%s'",
+            file_path.name
+        )
+
+        logging.info(
+            "File size: %d bytes",
+            file_size
+        )
+
+        logging.info(
+            "Number of parts: %d",
             parts
+        )
+
+        self.report_progress(
+            0,
+            parts,
+            (
+                f"Starting upload: "
+                f"{file_path.name} "
+                f"({file_size:,} bytes, "
+                f"{parts} part(s))"
+            )
         )
 
         try:
 
-            # -----------------------------------------
+            # =================================================
             # Upload chunks
-            # -----------------------------------------
+            # =================================================
 
             with file_path.open(
                 "rb"
@@ -477,22 +587,44 @@ class UdataUploader:
                 chunk_index = 0
                 chunk_offset = 0
 
+                last_response_data = None
+
                 while True:
 
-                    chunk_data = (
-                        input_file.read(
-                            chunk_size
-                        )
+                    chunk_data = input_file.read(
+                        CHUNK_SIZE
                     )
 
                     if not chunk_data:
                         break
 
-                    logging.info(
-                        "Uploading chunk %d of %d",
-                        chunk_index + 1,
-                        parts
+                    chunk_size = len(
+                        chunk_data
                     )
+
+                    logging.info(
+                        "Uploading part %d of %d "
+                        "(offset=%d, size=%d)",
+                        chunk_index + 1,
+                        parts,
+                        chunk_offset,
+                        chunk_size
+                    )
+
+                    self.report_progress(
+                        chunk_index,
+                        parts,
+                        (
+                            f"Uploading "
+                            f"{file_path.name}: "
+                            f"part {chunk_index + 1} "
+                            f"of {parts}"
+                        )
+                    )
+
+                    # -----------------------------------------
+                    # uData upload parameters
+                    # -----------------------------------------
 
                     data = {
                         "partindex": str(
@@ -502,7 +634,7 @@ class UdataUploader:
                             chunk_offset
                         ),
                         "chunksize": str(
-                            len(chunk_data)
+                            chunk_size
                         ),
                         "totalparts": str(
                             parts
@@ -516,10 +648,21 @@ class UdataUploader:
                         "uuid": upload_uuid,
                     }
 
+                    # -----------------------------------------
+                    # Send chunk
+                    #
+                    # IMPORTANT:
+                    #
+                    # The file is read into memory only one
+                    # chunk at a time. For a 10 MB chunk,
+                    # approximately 10 MB is used rather than
+                    # the entire file.
+                    # -----------------------------------------
+
                     files = {
                         "file": (
-                            "blob",
-                            BytesIO(chunk_data),
+                            file_path.name,
+                            chunk_data,
                             mime_type
                         )
                     }
@@ -535,121 +678,250 @@ class UdataUploader:
 
                     if not response.ok:
 
+                        response_text = response.text
+
                         return {
                             "status": "error",
                             "code": (
                                 response.status_code
                             ),
                             "error": (
-                                response.text
+                                f"Chunk {chunk_index + 1} "
+                                f"of {parts} failed "
+                                f"with HTTP "
+                                f"{response.status_code}:\n"
+                                f"{response_text}"
                             )
                         }
 
+                    # -----------------------------------------
+                    # Save response
+                    # -----------------------------------------
+
+                    last_response_data = (
+                        self.parse_json_response(
+                            response
+                        )
+                    )
+
+                    # -----------------------------------------
+                    # Update counters
+                    # -----------------------------------------
+
                     chunk_index += 1
 
-                    chunk_offset += len(
-                        chunk_data
+                    chunk_offset += chunk_size
+
+                    self.report_progress(
+                        chunk_index,
+                        parts,
+                        (
+                            f"Uploaded "
+                            f"{file_path.name}: "
+                            f"part {chunk_index} "
+                            f"of {parts}"
+                        )
                     )
 
-            # -----------------------------------------
-            # Finalize upload
-            # -----------------------------------------
+                    # -----------------------------------------
+                    # CRITICAL SMALL-FILE FIX
+                    #
+                    # When totalparts == 1, the upload request
+                    # itself is the complete upload.
+                    #
+                    # Do NOT send a second POST to the same
+                    # endpoint to finalize it.
+                    # -----------------------------------------
 
-            finalize_response = (
-                self.session.post(
-                    upload_url,
-                    data={
-                        "uuid": upload_uuid,
-                        "filename": (
-                            file_path.name
-                        ),
-                        "size": str(
-                            file_size
-                        ),
-                        "totalparts": str(
-                            parts
-                        ),
-                    },
-                    timeout=60
-                )
+                    if parts == 1:
+
+                        logging.info(
+                            "Single-part upload completed "
+                            "without separate finalization."
+                        )
+
+                        break
+
+            # =================================================
+            # Determine resource ID
+            # =================================================
+
+            resource_id = self.extract_resource_id(
+                last_response_data
             )
 
-            if not finalize_response.ok:
+            # =================================================
+            # Multi-part finalization
+            # =================================================
 
-                return {
-                    "status": "error",
-                    "code": (
-                        finalize_response.status_code
-                    ),
-                    "error": (
-                        finalize_response.text
+            if parts > 1:
+
+                logging.info(
+                    "All %d chunks uploaded. "
+                    "Finalizing upload...",
+                    parts
+                )
+
+                self.report_progress(
+                    parts,
+                    parts,
+                    (
+                        f"All chunks uploaded for "
+                        f"{file_path.name}. "
+                        f"Finalizing..."
                     )
-                }
-
-            resource = (
-                finalize_response.json()
-            )
-
-            resource_id = resource.get(
-                "id"
-            )
-
-            # -----------------------------------------
-            # Update resource metadata
-            # -----------------------------------------
-
-            if resource_id:
-
-                update_url = (
-                    f"{API_ENDPOINT}"
-                    f"datasets/{dataset_id}"
-                    f"/resources/{resource_id}/"
                 )
 
-                metadata = {
-                    "title": clean(
-                        row.get("title")
-                    ),
-                    "description": clean(
-                        row.get(
-                            "description"
-                        )
-                    ),
-                    "type": (
-                        self.convert_type(
-                            row["type"]
-                        )
-                    ),
-                    "format": clean(
-                        row["format"]
-                    ).upper()
-                }
-
-                update = (
-                    self.session.put(
-                        update_url,
-                        json=metadata,
+                finalize_response = (
+                    self.session.post(
+                        upload_url,
+                        data={
+                            "uuid": upload_uuid,
+                            "filename": (
+                                file_path.name
+                            ),
+                            "size": str(
+                                file_size
+                            ),
+                            "totalparts": str(
+                                parts
+                            ),
+                        },
                         timeout=60
                     )
                 )
 
-                if not update.ok:
+                if not finalize_response.ok:
 
                     return {
                         "status": "error",
-                        "resource_id": (
-                            resource_id
+                        "code": (
+                            finalize_response.status_code
                         ),
                         "error": (
-                            "Metadata update "
-                            "failed: "
-                            f"{update.text}"
+                            "Upload finalization failed "
+                            f"with HTTP "
+                            f"{finalize_response.status_code}:\n"
+                            f"{finalize_response.text}"
                         )
                     }
+
+                last_response_data = (
+                    self.parse_json_response(
+                        finalize_response
+                    )
+                )
+
+                resource_id = (
+                    self.extract_resource_id(
+                        last_response_data
+                    )
+                )
+
+            # =================================================
+            # Verify resource ID
+            # =================================================
+
+            if not resource_id:
+
+                logging.warning(
+                    "Upload succeeded but no resource ID "
+                    "was found in the API response: %s",
+                    last_response_data
+                )
+
+                return {
+                    "status": "error",
+                    "error": (
+                        "The file upload request succeeded, "
+                        "but the API did not return a resource ID.\n\n"
+                        "API response:\n"
+                        f"{last_response_data}"
+                    )
+                }
+
+            # =================================================
+            # Update resource metadata
+            # =================================================
+
+            update_url = (
+                f"{API_ENDPOINT}"
+                f"datasets/{dataset_id}"
+                f"/resources/{resource_id}/"
+            )
+
+            metadata = {
+                "title": clean(
+                    row.get("title")
+                ),
+                "description": clean(
+                    row.get(
+                        "description"
+                    )
+                ),
+                "type": (
+                    self.convert_type(
+                        row["type"]
+                    )
+                ),
+                "format": clean(
+                    row["format"]
+                ).upper()
+            }
+
+            logging.info(
+                "Updating metadata for resource %s",
+                resource_id
+            )
+
+            update = (
+                self.session.put(
+                    update_url,
+                    json=metadata,
+                    timeout=60
+                )
+            )
+
+            if not update.ok:
+
+                return {
+                    "status": "error",
+                    "resource_id": (
+                        resource_id
+                    ),
+                    "error": (
+                        "Metadata update failed "
+                        f"with HTTP "
+                        f"{update.status_code}:\n"
+                        f"{update.text}"
+                    )
+                }
+
+            self.report_progress(
+                parts,
+                parts,
+                (
+                    f"Completed: "
+                    f"{file_path.name}"
+                )
+            )
 
             return {
                 "status": "success",
                 "resource_id": resource_id
+            }
+
+        except requests.RequestException as e:
+
+            logging.exception(
+                "HTTP error during file upload"
+            )
+
+            return {
+                "status": "error",
+                "error": (
+                    f"HTTP/network error: {e}"
+                )
             }
 
         except Exception as e:
@@ -757,6 +1029,17 @@ class UdataUploader:
                 )
             }
 
+        except requests.RequestException as e:
+
+            logging.exception(
+                "HTTP error while creating URL resource"
+            )
+
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
         except Exception as e:
 
             logging.exception(
@@ -804,6 +1087,10 @@ class UdataUploader:
             "Processing %d rows",
             len(df)
         )
+
+        total_rows = len(df)
+
+        completed_rows = 0
 
         # ---------------------------------------------
         # Process rows
@@ -860,6 +1147,8 @@ class UdataUploader:
                     )
                 })
 
+                completed_rows += 1
+
                 continue
 
             # -----------------------------------------
@@ -904,6 +1193,18 @@ class UdataUploader:
                 )
             })
 
+            completed_rows += 1
+
+            self.report_progress(
+                completed_rows,
+                total_rows,
+                (
+                    f"Processed row "
+                    f"{completed_rows} "
+                    f"of {total_rows}"
+                )
+            )
+
 
     # =================================================
     # Generate report
@@ -918,7 +1219,8 @@ class UdataUploader:
             self.report_data
         ).to_csv(
             output_path,
-            index=False
+            index=False,
+            encoding="utf-8-sig"
         )
 
 
@@ -937,6 +1239,10 @@ class UDataUploaderGUI:
 
         self.root.title(
             "UData Uploader"
+        )
+
+        self.root.geometry(
+            "850x750"
         )
 
         # ---------------------------------------------
@@ -1099,7 +1405,7 @@ class UDataUploaderGUI:
         self.overview_text = (
             scrolledtext.ScrolledText(
                 self.root,
-                width=80,
+                width=100,
                 height=12
             )
         )
@@ -1120,7 +1426,7 @@ class UDataUploaderGUI:
         self.progress = ttk.Progressbar(
             self.root,
             orient="horizontal",
-            length=400,
+            length=600,
             mode="determinate"
         )
 
@@ -1140,7 +1446,7 @@ class UDataUploaderGUI:
         self.log_output = (
             scrolledtext.ScrolledText(
                 self.root,
-                width=80,
+                width=100,
                 height=12
             )
         )
@@ -1158,11 +1464,13 @@ class UDataUploaderGUI:
         # Upload button
         # ---------------------------------------------
 
-        ttk.Button(
+        self.upload_button = ttk.Button(
             self.root,
             text="Upload",
             command=self.start_upload
-        ).grid(
+        )
+
+        self.upload_button.grid(
             row=7,
             column=1,
             padx=5,
@@ -1358,6 +1666,22 @@ class UDataUploaderGUI:
                     )
                 )
 
+                # -------------------------------------
+                # Check dataset ID
+                # -------------------------------------
+
+                if not dataset_id:
+
+                    messagebox.showerror(
+                        "Error",
+                        (
+                            f"Row {index + 2}: "
+                            "dataset_id is required."
+                        )
+                    )
+
+                    return False
+
 
                 # -------------------------------------
                 # file_upload
@@ -1378,9 +1702,57 @@ class UDataUploaderGUI:
 
                         return False
 
+                    # ---------------------------------
+                    # Check type
+                    # ---------------------------------
 
-                    # Resolve filename against
-                    # selected Data Folder
+                    resource_type = clean(
+                        row.get("type")
+                    )
+
+                    if not resource_type:
+
+                        messagebox.showerror(
+                            "Error",
+                            (
+                                f"Row {index + 2}: "
+                                "type is required "
+                                "for file_upload."
+                            )
+                        )
+
+                        return False
+
+                    # ---------------------------------
+                    # Check format
+                    # ---------------------------------
+
+                    file_format = clean(
+                        row.get("format")
+                    ).upper()
+
+                    if file_format not in SUPPORTED_FORMATS:
+
+                        messagebox.showerror(
+                            "Error",
+                            (
+                                f"Row {index + 2}: "
+                                f"Unsupported format: "
+                                f"{file_format}\n\n"
+                                "Supported formats:\n"
+                                +
+                                ", ".join(
+                                    SUPPORTED_FORMATS.keys()
+                                )
+                            )
+                        )
+
+                        return False
+
+                    # ---------------------------------
+                    # Resolve filename
+                    # ---------------------------------
+
                     full_path = (
                         resolve_file_path(
                             file_name,
@@ -1388,8 +1760,10 @@ class UDataUploaderGUI:
                         )
                     )
 
-
+                    # ---------------------------------
                     # Check actual file
+                    # ---------------------------------
+
                     if not os.path.exists(
                         full_path
                     ):
@@ -1409,12 +1783,29 @@ class UDataUploaderGUI:
 
                         return False
 
+                    # ---------------------------------
+                    # Get file size
+                    # ---------------------------------
+
+                    file_size = os.path.getsize(
+                        full_path
+                    )
+
+                    parts = max(
+                        1,
+                        math.ceil(
+                            file_size / CHUNK_SIZE
+                        )
+                    )
 
                     overview.append(
                         (
                             f"Dataset: {dataset_id} | "
                             f"File: "
                             f"{os.path.basename(full_path)} | "
+                            f"Size: "
+                            f"{file_size:,} bytes | "
+                            f"Parts: {parts} | "
                             f"Path: {full_path} | "
                             f"Title: {title}"
                         )
@@ -1440,7 +1831,6 @@ class UDataUploaderGUI:
 
                         return False
 
-
                     if not url.startswith(
                         (
                             "http://",
@@ -1457,7 +1847,6 @@ class UDataUploaderGUI:
                         )
 
                         return False
-
 
                     overview.append(
                         (
@@ -1551,7 +1940,6 @@ class UDataUploaderGUI:
         if not self.validate_inputs():
             return
 
-
         api_key = (
             self.api_key.get().strip()
         )
@@ -1564,8 +1952,10 @@ class UDataUploaderGUI:
             self.data_folder.get().strip()
         )
 
-
+        # ---------------------------------------------
         # Reset UI
+        # ---------------------------------------------
+
         self.progress["value"] = 0
 
         self.log_output.delete(
@@ -1573,14 +1963,20 @@ class UDataUploaderGUI:
             tk.END
         )
 
-
         self.log_output.insert(
             tk.END,
             "Starting upload...\n"
         )
 
+        # Disable button while uploading
+        self.upload_button.config(
+            state="disabled"
+        )
 
+        # ---------------------------------------------
         # Run upload in background thread
+        # ---------------------------------------------
+
         threading.Thread(
             target=self.run_upload,
             args=(
@@ -1590,6 +1986,44 @@ class UDataUploaderGUI:
             ),
             daemon=True
         ).start()
+
+
+    # =================================================
+    # Progress callback
+    # =================================================
+
+    def update_progress(
+        self,
+        current,
+        total,
+        message
+    ):
+
+        def update():
+
+            if total > 0:
+
+                percentage = (
+                    current / total
+                ) * 100
+
+                self.progress["value"] = (
+                    percentage
+                )
+
+            self.log_output.insert(
+                tk.END,
+                f"{message}\n"
+            )
+
+            self.log_output.see(
+                tk.END
+            )
+
+        self.root.after(
+            0,
+            update
+        )
 
 
     # =================================================
@@ -1610,24 +2044,20 @@ class UDataUploaderGUI:
             # -----------------------------------------
 
             uploader = UdataUploader(
-                api_key
+                api_key,
+                progress_callback=(
+                    self.update_progress
+                )
             )
-
 
             # -----------------------------------------
             # Process CSV / Excel
-            #
-            # IMPORTANT:
-            # data_folder is passed here so that
-            # filenames from Excel are resolved
-            # against the selected folder.
             # -----------------------------------------
 
             uploader.process_input_file(
                 input_file,
                 data_folder
             )
-
 
             # -----------------------------------------
             # Generate report
@@ -1642,7 +2072,6 @@ class UDataUploaderGUI:
                 report_path
             )
 
-
             # -----------------------------------------
             # Tell GUI upload succeeded
             # -----------------------------------------
@@ -1652,7 +2081,6 @@ class UDataUploaderGUI:
                 self.upload_finished,
                 report_path
             )
-
 
         except Exception as e:
 
@@ -1689,6 +2117,14 @@ class UDataUploaderGUI:
             f"{report_path}\n"
         )
 
+        self.log_output.see(
+            tk.END
+        )
+
+        self.upload_button.config(
+            state="normal"
+        )
+
         messagebox.showinfo(
             "Success",
             (
@@ -1715,6 +2151,14 @@ class UDataUploaderGUI:
         self.log_output.insert(
             tk.END,
             f"{error}\n"
+        )
+
+        self.log_output.see(
+            tk.END
+        )
+
+        self.upload_button.config(
+            state="normal"
         )
 
         messagebox.showerror(
