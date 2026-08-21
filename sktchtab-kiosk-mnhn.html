@@ -4,138 +4,476 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sketchfab Museum Kiosk</title>
+
     <style>
         :root {
             --bg-color: #111;
             --text-color: #fff;
             --card-bg: #222;
-            --hover-scale: 1.02;
-            --transition-duration: 300ms;
+
             --border-radius: 12px;
             --spacing: 20px;
+
+            --page-padding: 20px;
+
+            --columns: 4;
+            --rows: 3;
+
             --font-size: 1rem;
+
             --placeholder-color: #444;
-            --min-card-size: 200px;
-            --max-card-size: 300px;
-            --ui-bar-height: 50px; /* Height of the Sketchfab UI bar */
+
+            --page-button-size: 60px;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+
             user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
+
+            -webkit-touch-callout: none;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+
+            overflow: hidden;
         }
 
         body {
             font-family: Arial, sans-serif;
-            background-color: var(--bg-color);
+
+            background: var(--bg-color);
             color: var(--text-color);
+
+            width: 100vw;
             height: 100vh;
+
             overflow: hidden;
+
             touch-action: manipulation;
         }
 
-        /* Gallery Styles */
-        #gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(var(--min-card-size), var(--max-card-size)));
-            gap: var(--spacing);
-            padding: var(--spacing);
-            height: 100%;
+        /* =========================================================
+           GALLERY PAGE
+           ========================================================= */
+
+        #gallery-page {
+            position: relative;
+
+            width: 100vw;
+            height: 100vh;
+
+            padding: var(--page-padding);
+
+            overflow: hidden;
         }
+
+
+        /* =========================================================
+           GALLERY GRID
+           ========================================================= */
+
+        #gallery {
+            width: 100%;
+            height: 100%;
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(var(--columns), 1fr);
+
+            grid-template-rows:
+                repeat(var(--rows), 1fr);
+
+            gap: var(--spacing);
+
+            overflow: hidden;
+        }
+
+
+        /* =========================================================
+           MODEL CARD
+           ========================================================= */
 
         .card {
+            position: relative;
+
             background: var(--card-bg);
+
             border-radius: var(--border-radius);
+
             overflow: hidden;
+
             cursor: pointer;
-            transition: transform var(--transition-duration) ease-in-out;
+
+            min-width: 0;
+            min-height: 0;
+
+            touch-action: manipulation;
+
+            transition:
+                transform 200ms ease,
+                box-shadow 200ms ease;
         }
 
-        .card:hover, .card:active {
-            transform: scale(var(--hover-scale));
+        .card:active {
+            transform: scale(0.98);
         }
+
+
+        /* =========================================================
+           FEATURED CARD
+           ========================================================= */
+
+        .card.featured {
+            grid-column: span 2;
+            grid-row: span 2;
+        }
+
+
+        /* =========================================================
+           CARD IMAGE
+           ========================================================= */
 
         .card img {
+            display: block;
+
             width: 100%;
-            aspect-ratio: 1.3;
+            height: 100%;
+
             object-fit: cover;
+
             background: var(--placeholder-color);
+
+            pointer-events: none;
         }
 
-        .card div {
-            padding: 10px;
-            text-align: center;
+
+        /* =========================================================
+           CARD TITLE
+           ========================================================= */
+
+        .card-title {
+            position: absolute;
+
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            padding: 14px 16px;
+
+            background:
+                linear-gradient(
+                    to top,
+                    rgba(0, 0, 0, 0.85),
+                    rgba(0, 0, 0, 0)
+                );
+
             font-size: var(--font-size);
+
+            line-height: 1.3;
+
+            text-align: center;
+
+            padding-top: 30px;
+
+            pointer-events: none;
         }
 
-        /* Viewer Styles */
+
+        /* =========================================================
+           FEATURED TITLE
+           ========================================================= */
+
+        .card.featured .card-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+
+            padding-bottom: 18px;
+        }
+
+
+        /* =========================================================
+           PAGE NAVIGATION
+           ========================================================= */
+
+        #page-navigation {
+            position: absolute;
+
+            left: 50%;
+            bottom: 20px;
+
+            transform: translateX(-50%);
+
+            display: flex;
+
+            align-items: center;
+            justify-content: center;
+
+            gap: 15px;
+
+            z-index: 5;
+        }
+
+
+        #previous-page,
+        #next-page {
+            width: var(--page-button-size);
+            height: var(--page-button-size);
+
+            border: none;
+
+            border-radius: 50%;
+
+            background: rgba(34, 34, 34, 0.95);
+
+            color: white;
+
+            font-size: 1.8rem;
+
+            cursor: pointer;
+
+            display: flex;
+
+            align-items: center;
+            justify-content: center;
+
+            touch-action: manipulation;
+
+            box-shadow:
+                0 3px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        #previous-page:active,
+        #next-page:active {
+            transform: scale(0.92);
+        }
+
+
+        #previous-page:disabled,
+        #next-page:disabled {
+            opacity: 0.25;
+
+            cursor: default;
+        }
+
+
+        /* =========================================================
+           PAGE INDICATOR
+           ========================================================= */
+
+        #page-indicator {
+            min-width: 80px;
+
+            padding: 10px 15px;
+
+            border-radius: 20px;
+
+            background: rgba(34, 34, 34, 0.95);
+
+            text-align: center;
+
+            font-size: 1rem;
+        }
+
+
+        /* =========================================================
+           VIEWER
+           ========================================================= */
+
         #viewer {
             display: none;
+
             position: fixed;
+
             inset: 0;
+
+            width: 100vw;
+            height: 100vh;
+
             background: #000;
+
             z-index: 10;
+
+            overflow: hidden;
         }
+
+
+        /* =========================================================
+           BACK BUTTON
+           ========================================================= */
 
         #back {
             position: absolute;
+
             top: 15px;
             left: 15px;
+
             z-index: 20;
+
             padding: 12px 18px;
-            background: var(--card-bg);
+
+            background: rgba(34, 34, 34, 0.95);
+
             border: none;
-            color: var(--text-color);
+
+            color: white;
+
             font-size: 1.2rem;
+
             cursor: pointer;
+
             border-radius: var(--border-radius);
+
+            touch-action: manipulation;
         }
+
+        #back:active {
+            transform: scale(0.96);
+        }
+
+
+        /* =========================================================
+           IFRAME
+           ========================================================= */
 
         #iframe-wrapper {
             position: absolute;
+
             inset: 0;
+
             width: 100%;
             height: 100%;
+
+            background: #000;
         }
+
 
         #iframe {
             position: absolute;
+
             inset: 0;
+
             width: 100%;
             height: 100%;
+
             border: 0;
-            pointer-events: auto; /* Enable interactions with the model */
+
+            display: block;
+
+            pointer-events: auto;
         }
 
-        /* Black bar to cover Sketchfab UI */
-        #ui-cover {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: var(--ui-bar-height);
-            background: #000;
-            z-index: 15;
-            pointer-events: none; /* Allow interactions to pass through to the model */
+
+        /* =========================================================
+           SMALL SCREEN FALLBACK
+           ========================================================= */
+
+        @media (max-width: 800px) {
+
+            :root {
+                --spacing: 10px;
+                --page-padding: 10px;
+            }
+
+            #page-navigation {
+                bottom: 10px;
+            }
+
         }
+
     </style>
 </head>
+
+
 <body>
-    <div id="gallery"></div>
-    <div id="viewer">
-        <button id="back">← Back</button>
-        <div id="iframe-wrapper">
-            <iframe id="iframe" allowfullscreen sandbox="allow-same-origin allow-scripts allow-forms allow-pointer-lock"></iframe>
-            <div id="ui-cover"></div>
+
+
+    <!-- =========================================================
+         GALLERY
+         ========================================================= -->
+
+    <div id="gallery-page">
+
+        <div id="gallery"></div>
+
+
+        <!-- =====================================================
+             PAGE NAVIGATION
+             ===================================================== -->
+
+        <div id="page-navigation">
+
+            <button
+                id="previous-page"
+                type="button"
+                aria-label="Previous page">
+                ←
+            </button>
+
+            <div id="page-indicator">
+                1 / 1
+            </div>
+
+            <button
+                id="next-page"
+                type="button"
+                aria-label="Next page">
+                →
+            </button>
+
         </div>
+
     </div>
 
+
+    <!-- =========================================================
+         VIEWER
+         ========================================================= -->
+
+    <div id="viewer">
+
+        <button
+            id="back"
+            type="button">
+            ← Back
+        </button>
+
+        <div id="iframe-wrapper">
+
+            <iframe
+                id="iframe"
+                title="Sketchfab 3D Viewer"
+                frameborder="0"
+                allowfullscreen
+                mozallowfullscreen="true"
+                webkitallowfullscreen="true"
+                allow="autoplay; fullscreen; xr-spatial-tracking"
+                xr-spatial-tracking
+                execution-while-out-of-viewport
+                execution-while-not-rendered
+                web-share>
+            </iframe>
+
+        </div>
+
+    </div>
+
+
     <script>
+
+        /* =========================================================
+           MODEL IDS
+           ========================================================= */
+
         const MODEL_IDS = [
             '56816fb55d054bdc9ecd6ea6b35b44c1',
             '1dc0a7826fdd4279b8041fab6c370d07',
@@ -152,106 +490,653 @@
             '44f769f570fd462db821a6ce6c96ba7a',
             'e24c52fb47db43b286ac92153e771c2c',
             '9b26c1d0988944b8aa995efce447c00b',
+            '2a4a2c6702494bb6a220576773ca5f94',
+            '14651059da2b4c1db1ca296920a3062a',
+            '14c2c0388b4547df9c68afe943417cf6',
+            '36df73258ec14448b67ba1859051c55c',
+            '457e199b78d6486585075aa9647f984f',
+            '44f769f570fd462db821a6ce6c96ba7a',
+            'e24c52fb47db43b286ac92153e771c2c',
+            '9b26c1d0988944b8aa995efce447c00b',
             '2a4a2c6702494bb6a220576773ca5f94'
         ];
 
-        // Fetch model metadata from Sketchfab API
+
+        /* =========================================================
+           PAGINATION
+           ========================================================= */
+
+        let currentPage = 0;
+
+        let modelsPerPage = 9;
+
+        let totalPages = 1;
+
+        let allModels = [];
+
+
+        /* =========================================================
+           PLACEHOLDER
+           ========================================================= */
+
+        const placeholderImage =
+            'data:image/svg+xml;utf8,' +
+            '<svg xmlns="http://www.w3.org/2000/svg" ' +
+            'width="1920" height="1080" viewBox="0 0 1920 1080">' +
+            '<rect width="1920" height="1080" fill="%23444"/>' +
+            '</svg>';
+
+
+        /* =========================================================
+           FETCH MODEL METADATA
+           ========================================================= */
+
         async function fetchModelsMetadata() {
+
             const models = [];
+
             for (const modelId of MODEL_IDS) {
+
                 try {
-                    const response = await fetch(`https://api.sketchfab.com/v3/models/${modelId}`);
-                    const data = await response.json();
+
+                    const response =
+                        await fetch(
+                            `https://api.sketchfab.com/v3/models/${modelId}`
+                        );
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+                    }
+
+                    const data =
+                        await response.json();
+
                     models.push({
                         uid: modelId,
-                        title: data.name || 'Untitled',
-                        thumbnail: data.thumbnails?.images?.[0]?.url || null
+
+                        title:
+                            data.name ||
+                            'Untitled',
+
+                        thumbnail:
+                            data.thumbnails
+                                ?.images?.[0]?.url ||
+                            null
                     });
+
                 } catch (error) {
-                    console.error(`Failed to fetch model ${modelId}:`, error);
+
+                    console.error(
+                        `Failed to fetch model ${modelId}:`,
+                        error
+                    );
+
                     models.push({
                         uid: modelId,
+
                         title: 'Untitled',
+
                         thumbnail: null
                     });
                 }
             }
+
             return models;
         }
 
-        // Render gallery
-        async function renderGallery() {
-            const models = await fetchModelsMetadata();
-            const gallery = document.getElementById('gallery');
-            models.forEach(model => {
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <img src="${model.thumbnail || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%23444"/></svg>'}" alt="${model.title}">
-                    <div>${model.title}</div>
-                `;
-                card.onclick = () => openModel(model.uid, model.title);
-                gallery.appendChild(card);
-            });
+
+        /* =========================================================
+           RENDER CURRENT PAGE
+           ========================================================= */
+
+        function renderPage() {
+
+            const gallery =
+                document.getElementById('gallery');
+
+            gallery.innerHTML = '';
+
+
+            /*
+             * Calculate the models displayed on this page.
+             */
+
+            const start =
+                currentPage * modelsPerPage;
+
+            const end =
+                Math.min(
+                    start + modelsPerPage,
+                    allModels.length
+                );
+
+            const pageModels =
+                allModels.slice(start, end);
+
+
+            /*
+             * Create cards.
+             */
+
+            pageModels.forEach(
+                (model, index) => {
+
+                    const card =
+                        document.createElement('div');
+
+                    card.className = 'card';
+
+
+                    /*
+                     * The first model on the FIRST page
+                     * is the featured 2x2 model.
+                     */
+
+                    if (
+                        currentPage === 0 &&
+                        index === 0
+                    ) {
+                        card.classList.add(
+                            'featured'
+                        );
+                    }
+
+
+                    const image =
+                        document.createElement('img');
+
+                    image.src =
+                        model.thumbnail ||
+                        placeholderImage;
+
+                    image.alt =
+                        model.title;
+
+                    image.draggable = false;
+
+
+                    const title =
+                        document.createElement('div');
+
+                    title.className =
+                        'card-title';
+
+                    title.textContent =
+                        model.title;
+
+
+                    card.appendChild(image);
+
+                    card.appendChild(title);
+
+
+                    card.addEventListener(
+                        'click',
+                        () => {
+
+                            openModel(
+                                model.uid,
+                                model.title
+                            );
+                        }
+                    );
+
+
+                    gallery.appendChild(card);
+                }
+            );
+
+
+            updatePagination();
         }
 
-        // Open model in viewer
+
+        /* =========================================================
+           UPDATE PAGINATION
+           ========================================================= */
+
+        function updatePagination() {
+
+            const indicator =
+                document.getElementById(
+                    'page-indicator'
+                );
+
+            const previous =
+                document.getElementById(
+                    'previous-page'
+                );
+
+            const next =
+                document.getElementById(
+                    'next-page'
+                );
+
+
+            totalPages =
+                Math.ceil(
+                    allModels.length /
+                    modelsPerPage
+                );
+
+
+            if (totalPages < 1) {
+                totalPages = 1;
+            }
+
+
+            indicator.textContent =
+                `${currentPage + 1} / ${totalPages}`;
+
+
+            previous.disabled =
+                currentPage === 0;
+
+
+            next.disabled =
+                currentPage >= totalPages - 1;
+
+
+            /*
+             * Hide navigation completely if there is
+             * only one page.
+             */
+
+            const navigation =
+                document.getElementById(
+                    'page-navigation'
+                );
+
+            navigation.style.display =
+                totalPages > 1
+                    ? 'flex'
+                    : 'none';
+        }
+
+
+        /* =========================================================
+           NEXT PAGE
+           ========================================================= */
+
+        function nextPage() {
+
+            if (
+                currentPage <
+                totalPages - 1
+            ) {
+
+                currentPage++;
+
+                renderPage();
+
+                resetIdleTimer();
+            }
+        }
+
+
+        /* =========================================================
+           PREVIOUS PAGE
+           ========================================================= */
+
+        function previousPage() {
+
+            if (
+                currentPage > 0
+            ) {
+
+                currentPage--;
+
+                renderPage();
+
+                resetIdleTimer();
+            }
+        }
+
+
+        /* =========================================================
+           OPEN MODEL
+           ========================================================= */
+
         function openModel(uid, title) {
-            const viewer = document.getElementById('viewer');
-            const iframe = document.getElementById('iframe');
-            iframe.src = `https://sketchfab.com/models/${uid}/embed?autostart=1&ui_infos=0&ui_controls=0&ui_help=0&ui_hint=0&ui_settings=0&ui_vr=0&ui_ar=0&ui_watermark=0&transparent=1`;
-            viewer.style.display = 'block';
+
+            const viewer =
+                document.getElementById('viewer');
+
+            const iframe =
+                document.getElementById('iframe');
+
+
+            const embedUrl =
+                `https://sketchfab.com/models/${uid}/embed` +
+
+                `?autostart=1` +
+
+                `&ui_animations=0` +
+
+                `&ui_infos=0` +
+
+                `&ui_stop=0` +
+
+                `&ui_inspector=0` +
+
+                `&ui_watermark_link=0` +
+
+                `&ui_watermark=0` +
+
+                `&ui_ar=0` +
+
+                `&ui_help=0` +
+
+                `&ui_settings=0` +
+
+                `&ui_vr=0` +
+
+                `&ui_fullscreen=0` +
+
+                `&ui_annotations=0`;
+
+
+            iframe.src =
+                embedUrl;
+
+
+            viewer.style.display =
+                'block';
+
+
             resetIdleTimer();
         }
 
-        // Close viewer
+
+        /* =========================================================
+           CLOSE VIEWER
+           ========================================================= */
+
         function closeViewer() {
-            const viewer = document.getElementById('viewer');
-            const iframe = document.getElementById('iframe');
+
+            const viewer =
+                document.getElementById('viewer');
+
+            const iframe =
+                document.getElementById('iframe');
+
+
             iframe.src = '';
-            viewer.style.display = 'none';
+
+
+            viewer.style.display =
+                'none';
+
+
+            clearTimeout(
+                idleTimer
+            );
         }
 
-        // Idle timer
-        let idleTimer;
+
+        /* =========================================================
+           IDLE TIMER
+           ========================================================= */
+
+        let idleTimer = null;
+
+        const IDLE_TIME =
+            90000;
+
+
         function resetIdleTimer() {
-            clearTimeout(idleTimer);
-            idleTimer = setTimeout(closeViewer, 90000); // 90 seconds
+
+            clearTimeout(
+                idleTimer
+            );
+
+
+            const viewer =
+                document.getElementById('viewer');
+
+
+            if (
+                viewer.style.display !==
+                'block'
+            ) {
+                return;
+            }
+
+
+            idleTimer =
+                setTimeout(
+                    closeViewer,
+                    IDLE_TIME
+                );
         }
 
-        // Disable right-click
-        document.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-        });
 
-        // Disable keyboard shortcuts (e.g., F12, Ctrl+U, etc.)
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'F12' || (e.ctrlKey && e.key === 'u') || (e.ctrlKey && e.key === 's') || (e.ctrlKey && e.key === 'c')) {
-                e.preventDefault();
+        /* =========================================================
+           POINTER ACTIVITY
+           ========================================================= */
+
+        document.addEventListener(
+            'pointerdown',
+            resetIdleTimer,
+            { passive: true }
+        );
+
+
+        document.addEventListener(
+            'pointermove',
+            resetIdleTimer,
+            { passive: true }
+        );
+
+
+        document.addEventListener(
+            'touchstart',
+            resetIdleTimer,
+            { passive: true }
+        );
+
+
+        /* =========================================================
+           CONTEXT MENU
+           ========================================================= */
+
+        document.addEventListener(
+            'contextmenu',
+            event => {
+                event.preventDefault();
             }
-        });
+        );
 
-        // Request fullscreen on load
+
+        /* =========================================================
+           DRAGGING
+           ========================================================= */
+
+        document.addEventListener(
+            'dragstart',
+            event => {
+                event.preventDefault();
+            }
+        );
+
+
+        /* =========================================================
+           KEYBOARD RESTRICTIONS
+           ========================================================= */
+
+        document.addEventListener(
+            'keydown',
+            event => {
+
+                if (
+
+                    event.key === 'F12' ||
+
+                    (
+                        event.ctrlKey &&
+                        (
+                            event.key.toLowerCase() === 'u' ||
+                            event.key.toLowerCase() === 's' ||
+                            event.key.toLowerCase() === 'c'
+                        )
+                    ) ||
+
+                    (
+                        event.metaKey &&
+                        (
+                            event.key.toLowerCase() === 'u' ||
+                            event.key.toLowerCase() === 's' ||
+                            event.key.toLowerCase() === 'c'
+                        )
+                    )
+
+                ) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+                }
+
+
+                /*
+                 * Escape does not close the viewer.
+                 * The Back button is used instead.
+                 */
+
+                if (
+                    event.key === 'Escape'
+                ) {
+
+                    const viewer =
+                        document.getElementById(
+                            'viewer'
+                        );
+
+                    if (
+                        viewer.style.display ===
+                        'block'
+                    ) {
+
+                        event.preventDefault();
+
+                        resetIdleTimer();
+                    }
+                }
+            }
+        );
+
+
+        /* =========================================================
+           FULLSCREEN
+           ========================================================= */
+
         function requestFullscreen() {
-            const elem = document.documentElement;
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen().catch(err => {
-                    console.error(`Error attempting to enable fullscreen: ${err.message}`);
-                });
-            } else if (elem.webkitRequestFullscreen) { /* Safari */
+
+            const elem =
+                document.documentElement;
+
+
+            if (
+                document.fullscreenElement
+            ) {
+                return;
+            }
+
+
+            if (
+                elem.requestFullscreen
+            ) {
+
+                elem.requestFullscreen()
+                    .catch(error => {
+
+                        console.warn(
+                            'Fullscreen request was not accepted:',
+                            error
+                        );
+
+                    });
+
+            } else if (
+                elem.webkitRequestFullscreen
+            ) {
+
                 elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) { /* IE11 */
+
+            } else if (
+                elem.msRequestFullscreen
+            ) {
+
                 elem.msRequestFullscreen();
             }
         }
 
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            renderGallery();
-            requestFullscreen();
-        });
-        document.getElementById('back').onclick = closeViewer;
-        document.onpointerdown = resetIdleTimer;
+
+        /* =========================================================
+           BUTTON EVENTS
+           ========================================================= */
+
+        document
+            .getElementById('next-page')
+            .addEventListener(
+                'click',
+                nextPage
+            );
+
+
+        document
+            .getElementById('previous-page')
+            .addEventListener(
+                'click',
+                previousPage
+            );
+
+
+        document
+            .getElementById('back')
+            .addEventListener(
+                'click',
+                closeViewer
+            );
+
+
+        /* =========================================================
+           INITIALIZE
+           ========================================================= */
+
+        document.addEventListener(
+            'DOMContentLoaded',
+            async () => {
+
+                allModels =
+                    await fetchModelsMetadata();
+
+
+                /*
+                 * We use 9 models per page:
+                 *
+                 * Featured model = 2x2
+                 * Remaining space = 8 normal tiles
+                 *
+                 * Total grid = 4 columns x 3 rows
+                 */
+
+                modelsPerPage = 9;
+
+
+                currentPage = 0;
+
+
+                renderPage();
+
+
+                requestFullscreen();
+            }
+        );
+
     </script>
+
 </body>
 </html>
