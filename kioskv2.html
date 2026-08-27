@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Sketchfab Museum Kiosk</title>
+
+    <!-- =========================================================
+         GOOGLE FONT — INTER
+         ========================================================= -->
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        /* =========================================================
+           THEME
+           ========================================================= */
+
+        :root {
+
+            --bg-color: #001c26;
+
+            --text-color: #ffffff;
+
+            --card-bg: #0b2a33;
+
+            --border-color:
+                rgba(255, 255, 255, 0.12);
+
+            --accent-purple: #9999cc;
+
+            --accent-red: #FF6666;
+
+            --accent-green: #99cc99;
+
+            --border-radius: 12px;
+
+            --spacing: 20px;
+
+            --page-padding: 20px;
+
+            --columns: 4;
+
+            --rows: 3;
+
+            --title-size: 1rem;
+
+            --title-weight: 500;
+
+            --navigation-font-size: 1.15rem;
+
+        }
+
+
+        /* =========================================================
+           GLOBAL RESET
+           ========================================================= */
+
+        * {
+
+            margin: 0;
+
+            padding: 0;
+
+            box-sizing: border-box;
+
+            user-select: none;
+
+            -webkit-user-select: none;
+
+            -moz-user-select: none;
+
+            -ms-user-select: none;
+
+            -webkit-touch-callout: none;
+
+        }
+
+
+        html,
+        body {
+
+            width: 100%;
+
+            height: 100%;
+
+            overflow: hidden;
+
+        }
+
+
+        body {
+
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            background:
+                var(--bg-color);
+
+            color:
+                var(--text-color);
+
+            width: 100vw;
+
+            height: 100vh;
+
+            overflow: hidden;
+
+            touch-action: manipulation;
+
+        }
+
+
+        /* =========================================================
+           GALLERY PAGE
+           ========================================================= */
+
+        #gallery-page {
+
+            position: relative;
+
+            width: 100vw;
+
+            height: 100vh;
+
+            padding:
+                var(--page-padding);
+
+            overflow: hidden;
+
+            background:
+                var(--bg-color);
+
+        }
+
+
+        /* =========================================================
+           GALLERY GRID
+           ========================================================= */
+
+        #gallery {
+
+            width: 100%;
+
+            height: 100%;
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    var(--columns),
+                    minmax(0, 1fr)
+                );
+
+            grid-template-rows:
+                repeat(
+                    var(--rows),
+                    minmax(0, 1fr)
+                );
+
+            gap:
+                var(--spacing);
+
+            overflow: hidden;
+
+        }
+
+
+        /* =========================================================
+           MODEL CARD
+           ========================================================= */
+
+        .card {
+
+            position: relative;
+
+            background:
+                var(--card-bg);
+
+            border-radius:
+                var(--border-radius);
+
+            overflow: hidden;
+
+            cursor: pointer;
+
+            min-width: 0;
+
+            min-height: 0;
+
+            touch-action: manipulation;
+
+            border:
+                1px solid
+                var(--border-color);
+
+            transition:
+                transform 200ms ease,
+                box-shadow 200ms ease,
+                border-color 200ms ease;
+
+        }
+
+
+        .card:hover {
+
+            border-color:
+                rgba(
+                    153,
+                    153,
+                    204,
+                    0.7
+                );
+
+            box-shadow:
+                0 6px 20px
+                rgba(0, 0, 0, 0.25);
+
+        }
+
+
+        .card:active {
+
+            transform:
+                scale(0.98);
+
+        }
+
+
+        /* =========================================================
+           FEATURED CARD
+           ========================================================= */
+
+        .card.featured {
+
+            grid-column:
+                1 / span 2;
+
+            grid-row:
+                1 / span 2;
+
+        }
+
+
+        /* =========================================================
+           CARD IMAGE
+           ========================================================= */
+
+        .card img {
+
+            display: block;
+
+            width: 100%;
+
+            height: 100%;
+
+            object-fit: cover;
+
+            background:
+                #163840;
+
+            pointer-events: none;
+
+        }
+
+
+        /* =========================================================
+           CARD TITLE
+           ========================================================= */
+
+        .card-title {
+
+            position: absolute;
+
+            left: 0;
+
+            right: 0;
+
+            bottom: 0;
+
+            padding:
+                30px 16px 14px 16px;
+
+            background:
+                linear-gradient(
+                    to top,
+                    rgba(0, 28, 38, 0.95),
+                    rgba(0, 28, 38, 0.65),
+                    rgba(0, 28, 38, 0)
+                );
+
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            font-size:
+                var(--title-size);
+
+            font-weight:
+                var(--title-weight);
+
+            line-height:
+                1.3;
+
+            color:
+                #ffffff;
+
+            text-align:
+                center;
+
+            pointer-events:
+                none;
+
+        }
+
+
+        /* =========================================================
+           NAVIGATION TILE
+           ========================================================= */
+
+        .navigation-card {
+
+            position: relative;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            width: 100%;
+
+            height: 100%;
+
+            padding: 0;
+
+            border-radius:
+                var(--border-radius);
+
+            background:
+                rgba(
+                    153,
+                    153,
+                    204,
+                    0.12
+                );
+
+            border:
+                2px solid
+                var(--accent-purple);
+
+            color:
+                var(--accent-purple);
+
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            font-size:
+                var(--navigation-font-size);
+
+            font-weight:
+                600;
+
+            cursor:
+                pointer;
+
+            touch-action:
+                manipulation;
+
+            transition:
+                background 150ms ease,
+                color 150ms ease,
+                transform 150ms ease;
+
+            appearance:
+                none;
+
+            -webkit-appearance:
+                none;
+
+        }
+
+
+        .navigation-card:hover {
+
+            background:
+                var(--accent-purple);
+
+            color:
+                var(--bg-color);
+
+        }
+
+
+        .navigation-card:active {
+
+            transform:
+                scale(0.97);
+
+        }
+
+
+        /* =========================================================
+           NEXT BUTTON
+           ========================================================= */
+
+        .navigation-card.next {
+
+            border-color:
+                var(--accent-green);
+
+            color:
+                var(--accent-green);
+
+            background:
+                rgba(
+                    153,
+                    204,
+                    153,
+                    0.10
+                );
+
+        }
+
+
+        .navigation-card.next:hover {
+
+            background:
+                var(--accent-green);
+
+            color:
+                var(--bg-color);
+
+        }
+
+
+        /* =========================================================
+           BACK BUTTON — GALLERY
+           ========================================================= */
+
+        .navigation-card.back {
+
+            border-color:
+                var(--accent-purple);
+
+            color:
+                var(--accent-purple);
+
+            background:
+                rgba(
+                    153,
+                    153,
+                    204,
+                    0.10
+                );
+
+        }
+
+
+        .navigation-card.back:hover {
+
+            background:
+                var(--accent-purple);
+
+            color:
+                var(--bg-color);
+
+        }
+
+
+        /* =========================================================
+           VIEWER
+           ========================================================= */
+
+        #viewer {
+
+            display:
+                none;
+
+            position:
+                fixed;
+
+            inset:
+                0;
+
+            width:
+                100vw;
+
+            height:
+                100vh;
+
+            background:
+                #000;
+
+            z-index:
+                100;
+
+            overflow:
+                hidden;
+
+        }
+
+
+        /* =========================================================
+           BACK BUTTON IN SKETCHFAB VIEWER
+           ========================================================= */
+
+        #back {
+
+            position:
+                absolute;
+
+            top:
+                15px;
+
+            left:
+                15px;
+
+            z-index:
+                1000;
+
+            display:
+                block;
+
+            padding:
+                12px 18px;
+
+            margin:
+                0;
+
+            background:
+                var(--accent-purple);
+
+            border:
+                none;
+
+            outline:
+                none;
+
+            color:
+                var(--bg-color);
+
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            font-size:
+                1rem;
+
+            font-weight:
+                600;
+
+            cursor:
+                pointer;
+
+            border-radius:
+                var(--border-radius);
+
+            touch-action:
+                manipulation;
+
+            pointer-events:
+                auto;
+
+            -webkit-tap-highlight-color:
+                transparent;
+
+        }
+
+
+        #back:hover {
+
+            background:
+                var(--accent-green);
+
+        }
+
+
+        #back:active {
+
+            transform:
+                scale(0.96);
+
+        }
+
+
+        #back:focus {
+
+            outline:
+                none;
+
+        }
+
+
+        /* =========================================================
+           IFRAME WRAPPER
+           ========================================================= */
+
+        #iframe-wrapper {
+
+            position:
+                absolute;
+
+            inset:
+                0;
+
+            width:
+                100%;
+
+            height:
+                100%;
+
+            background:
+                #000;
+
+            z-index:
+                100;
+
+        }
+
+
+        /* =========================================================
+           IFRAME
+           ========================================================= */
+
+        #iframe {
+
+            position:
+                absolute;
+
+            inset:
+                0;
+
+            width:
+                100%;
+
+            height:
+                100%;
+
+            border:
+                0;
+
+            display:
+                block;
+
+            pointer-events:
+                auto;
+
+        }
+
+
+        /* =========================================================
+           SMALL SCREEN
+           ========================================================= */
+
+        @media (max-width: 800px) {
+
+            :root {
+
+                --spacing:
+                    10px;
+
+                --page-padding:
+                    10px;
+
+                --navigation-font-size:
+                    0.95rem;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+    <!-- =========================================================
+         GALLERY
+         ========================================================= -->
+
+    <div id="gallery-page">
+
+        <div id="gallery"></div>
+
+    </div>
+
+
+    <!-- =========================================================
+         VIEWER
+         ========================================================= -->
+
+    <div id="viewer">
+
+        <!--
+             IMPORTANT:
+             This button is outside the iframe.
+             It therefore controls the parent page and can
+             close the Sketchfab viewer.
+        -->
+
+        <button
+            id="back"
+            type="button"
+            aria-label="Back to gallery"
+        >
+            ← Back
+        </button>
+
+
+        <div id="iframe-wrapper">
+
+            <iframe
+                id="iframe"
+                title="Sketchfab 3D Viewer"
+                frameborder="0"
+                allowfullscreen
+                mozallowfullscreen="true"
+                webkitallowfullscreen="true"
+                allow="autoplay; fullscreen; xr-spatial-tracking"
+                xr-spatial-tracking
+                execution-while-out-of-viewport
+                execution-while-not-rendered
+                web-share
+            ></iframe>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        /* =========================================================
+           MODEL IDS
+           ========================================================= */
+
+        const MODEL_IDS = [
+
+            '56816fb55d054bdc9ecd6ea6b35b44c1',
+            '1dc0a7826fdd4279b8041fab6c370d07',
+            'ebc60a9ceed249f186bc42bf67799708',
+            '1ef831b55161418fb94e2d710839cb4f',
+            'b243b5da87494a11b63441f4620dbd26',
+            '453bbfa99fd5472681f1cca37ef2a028',
+            '377b3b9e288d4265b5de8d95f897a5eb',
+            '90318595f90541af8ffb6b5edb855c77',
+            '14651059da2b4c1db1ca296920a3062a',
+            '14c2c0388b4547df9c68afe943417cf6',
+            '36df73258ec14448b67ba1859051c55c',
+            '457e199b78d6486585075aa9647f984f',
+            '44f769f570fd462db821a6ce6c96ba7a',
+            'e24c52fb47db43b286ac92153e771c2c',
+            '9b26c1d0988944b8aa995efce447c00b',
+            '2a4a2c6702494bb6a220576773ca5f94',
+            '36df73258ec14448b67ba1859051c55c',
+            '457e199b78d6486585075aa9647f984f',
+            '44f769f570fd462db821a6ce6c96ba7a',
+            'e24c52fb47db43b286ac92153e771c2c',
+            '9b26c1d0988944b8aa995efce447c00b',
+            '2a4a2c6702494bb6a220576773ca5f94'
+
+        ];
+
+
+        /* =========================================================
+           PAGINATION
+           ========================================================= */
+
+        const FIRST_PAGE_MODELS = 9;
+
+        const NORMAL_PAGE_MODELS = 12;
+
+        let currentPage = 0;
+
+        let totalPages = 1;
+
+        let allModels = [];
+
+
+        /* =========================================================
+           PLACEHOLDER IMAGE
+           ========================================================= */
+
+        const placeholderImage =
+            'data:image/svg+xml;utf8,' +
+            '<svg xmlns="http://www.w3.org/2000/svg" ' +
+            'width="1920" height="1080" ' +
+            'viewBox="0 0 1920 1080">' +
+            '<rect width="1920" height="1080" ' +
+            'fill="%23163840"/>' +
+            '</svg>';
+
+
+        /* =========================================================
+           CALCULATE TOTAL PAGES
+           ========================================================= */
+
+        function calculateTotalPages() {
+
+            if (
+                allModels.length <=
+                FIRST_PAGE_MODELS
+            ) {
+
+                return 1;
+
+            }
+
+            return (
+                1 +
+                Math.ceil(
+                    (
+                        allModels.length -
+                        FIRST_PAGE_MODELS
+                    ) /
+                    NORMAL_PAGE_MODELS
+                )
+            );
+
+        }
+
+
+        /* =========================================================
+           GET PAGE MODELS
+           ========================================================= */
+
+        function getPageModels(page) {
+
+            if (
+                page === 0
+            ) {
+
+                return allModels.slice(
+                    0,
+                    FIRST_PAGE_MODELS
+                );
+
+            }
+
+            const start =
+                FIRST_PAGE_MODELS +
+                (
+                    page - 1
+                ) *
+                NORMAL_PAGE_MODELS;
+
+            return allModels.slice(
+                start,
+                start + NORMAL_PAGE_MODELS
+            );
+
+        }
+
+
+        /* =========================================================
+           FETCH MODEL METADATA
+           ========================================================= */
+
+        async function fetchModelsMetadata() {
+
+            const models = [];
+
+            for (
+                const modelId of MODEL_IDS
+            ) {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            `https://api.sketchfab.com/v3/models/${modelId}`
+                        );
+
+                    if (
+                        !response.ok
+                    ) {
+
+                        throw new Error(
+                            `HTTP ${response.status}`
+                        );
+
+                    }
+
+                    const data =
+                        await response.json();
+
+                    models.push({
+
+                        uid:
+                            modelId,
+
+                        title:
+                            data.name ||
+                            'Untitled',
+
+                        thumbnail:
+                            data.thumbnails
+                                ?.images?.[0]?.url ||
+                            null
+
+                    });
+
+                } catch (error) {
+
+                    console.error(
+                        `Failed to fetch model ${modelId}:`,
+                        error
+                    );
+
+                    models.push({
+
+                        uid:
+                            modelId,
+
+                        title:
+                            'Untitled',
+
+                        thumbnail:
+                            null
+
+                    });
+
+                }
+
+            }
+
+            return models;
+
+        }
+
+
+        /* =========================================================
+           CREATE MODEL CARD
+           ========================================================= */
+
+        function createModelCard(model) {
+
+            const card =
+                document.createElement(
+                    'div'
+                );
+
+            card.className =
+                'card';
+
+            const image =
+                document.createElement(
+                    'img'
+                );
+
+            image.src =
+                model.thumbnail ||
+                placeholderImage;
+
+            image.alt =
+                model.title;
+
+            image.draggable =
+                false;
+
+            const title =
+                document.createElement(
+                    'div'
+                );
+
+            title.className =
+                'card-title';
+
+            title.textContent =
+                model.title;
+
+            card.appendChild(
+                image
+            );
+
+            card.appendChild(
+                title
+            );
+
+            card.addEventListener(
+                'click',
+                () => {
+
+                    openModel(
+                        model.uid,
+                        model.title
+                    );
+
+                }
+            );
+
+            return card;
+
+        }
+
+
+        /* =========================================================
+           CREATE NAVIGATION CARD
+           ========================================================= */
+
+        function createNavigationCard(
+            type
+        ) {
+
+            const card =
+                document.createElement(
+                    'button'
+                );
+
+            card.type =
+                'button';
+
+            card.className =
+                'navigation-card';
+
+            if (
+                type === 'next'
+            ) {
+
+                card.classList.add(
+                    'next'
+                );
+
+                card.innerHTML =
+                    'Next&nbsp;&nbsp;→';
+
+                card.addEventListener(
+                    'click',
+                    nextPage
+                );
+
+            }
+
+            if (
+                type === 'back'
+            ) {
+
+                card.classList.add(
+                    'back'
+                );
+
+                card.innerHTML =
+                    '←&nbsp;&nbsp;Back';
+
+                card.addEventListener(
+                    'click',
+                    previousPage
+                );
+
+            }
+
+            return card;
+
+        }
+
+
+        /* =========================================================
+           RENDER PAGE 1
+           ========================================================= */
+
+        function renderFirstPage(
+            pageModels
+        ) {
+
+            const gallery =
+                document.getElementById(
+                    'gallery'
+                );
+
+            if (
+                pageModels.length > 0
+            ) {
+
+                const featured =
+                    createModelCard(
+                        pageModels[0]
+                    );
+
+                featured.classList.add(
+                    'featured'
+                );
+
+                gallery.appendChild(
+                    featured
+                );
+
+            }
+
+            for (
+                let i = 1;
+                i < pageModels.length;
+                i++
+            ) {
+
+                if (
+                    i === pageModels.length - 1 &&
+                    totalPages > 1
+                ) {
+
+                    gallery.appendChild(
+                        createNavigationCard(
+                            'next'
+                        )
+                    );
+
+                    continue;
+
+                }
+
+                gallery.appendChild(
+                    createModelCard(
+                        pageModels[i]
+                    )
+                );
+
+            }
+
+        }
+
+
+        /* =========================================================
+           RENDER NORMAL PAGE
+           ========================================================= */
+
+        function renderNormalPage(
+            pageModels
+        ) {
+
+            const gallery =
+                document.getElementById(
+                    'gallery'
+                );
+
+            const isLastPage =
+                currentPage ===
+                totalPages - 1;
+
+            const backCard =
+                createNavigationCard(
+                    'back'
+                );
+
+            backCard.style.gridColumn =
+                '1';
+
+            backCard.style.gridRow =
+                '3';
+
+            gallery.appendChild(
+                backCard
+            );
+
+
+            const modelPositions = [
+
+                {
+                    column: 1,
+                    row: 1
+                },
+
+                {
+                    column: 2,
+                    row: 1
+                },
+
+                {
+                    column: 3,
+                    row: 1
+                },
+
+                {
+                    column: 4,
+                    row: 1
+                },
+
+                {
+                    column: 1,
+                    row: 2
+                },
+
+                {
+                    column: 2,
+                    row: 2
+                },
+
+                {
+                    column: 3,
+                    row: 2
+                },
+
+                {
+                    column: 4,
+                    row: 2
+                },
+
+                {
+                    column: 2,
+                    row: 3
+                },
+
+                {
+                    column: 3,
+                    row: 3
+                }
+
+            ];
+
+
+            if (
+                isLastPage
+            ) {
+
+                modelPositions.push({
+
+                    column: 4,
+                    row: 3
+
+                });
+
+            }
+
+
+            pageModels.forEach(
+                (model, index) => {
+
+                    if (
+                        !modelPositions[index]
+                    ) {
+
+                        return;
+
+                    }
+
+                    const position =
+                        modelPositions[index];
+
+                    const card =
+                        createModelCard(
+                            model
+                        );
+
+                    card.style.gridColumn =
+                        position.column;
+
+                    card.style.gridRow =
+                        position.row;
+
+                    gallery.appendChild(
+                        card
+                    );
+
+                }
+            );
+
+
+            if (
+                !isLastPage
+            ) {
+
+                const nextCard =
+                    createNavigationCard(
+                        'next'
+                    );
+
+                nextCard.style.gridColumn =
+                    '4';
+
+                nextCard.style.gridRow =
+                    '3';
+
+                gallery.appendChild(
+                    nextCard
+                );
+
+            }
+
+        }
+
+
+        /* =========================================================
+           RENDER CURRENT PAGE
+           ========================================================= */
+
+        function renderPage() {
+
+            const gallery =
+                document.getElementById(
+                    'gallery'
+                );
+
+            gallery.innerHTML =
+                '';
+
+            const pageModels =
+                getPageModels(
+                    currentPage
+                );
+
+            if (
+                currentPage === 0
+            ) {
+
+                renderFirstPage(
+                    pageModels
+                );
+
+            } else {
+
+                renderNormalPage(
+                    pageModels
+                );
+
+            }
+
+        }
+
+
+        /* =========================================================
+           NEXT PAGE
+           ========================================================= */
+
+        function nextPage() {
+
+            if (
+                currentPage <
+                totalPages - 1
+            ) {
+
+                currentPage++;
+
+                renderPage();
+
+                resetIdleTimer();
+
+            }
+
+        }
+
+
+        /* =========================================================
+           PREVIOUS PAGE
+           ========================================================= */
+
+        function previousPage() {
+
+            if (
+                currentPage > 0
+            ) {
+
+                currentPage--;
+
+                renderPage();
+
+                resetIdleTimer();
+
+            }
+
+        }
+
+
+        /* =========================================================
+           OPEN MODEL
+           ========================================================= */
+
+        function openModel(
+            uid,
+            title
+        ) {
+
+            const viewer =
+                document.getElementById(
+                    'viewer'
+                );
+
+            const iframe =
+                document.getElementById(
+                    'iframe'
+                );
+
+            const embedUrl =
+                `https://sketchfab.com/models/${uid}/embed` +
+
+                `?autostart=1` +
+
+                `&ui_animations=0` +
+
+                `&ui_infos=0` +
+
+                `&ui_stop=0` +
+
+                `&ui_inspector=0` +
+
+                `&ui_watermark_link=0` +
+
+                `&ui_watermark=0` +
+
+                `&ui_ar=0` +
+
+                `&ui_help=0` +
+
+                `&ui_settings=0` +
+
+                `&ui_vr=0` +
+
+                `&ui_fullscreen=0` +
+
+                `&ui_annotations=0`;
+
+
+            /*
+             * Set the iframe source first.
+             */
+
+            iframe.src =
+                embedUrl;
+
+
+            /*
+             * Show the viewer.
+             */
+
+            viewer.style.display =
+                'block';
+
+
+            /*
+             * Start the idle timer.
+             */
+
+            resetIdleTimer();
+
+        }
+
+
+        /* =========================================================
+           CLOSE VIEWER
+           ========================================================= */
+
+        function closeViewer() {
+
+            const viewer =
+                document.getElementById(
+                    'viewer'
+                );
+
+            const iframe =
+                document.getElementById(
+                    'iframe'
+                );
+
+
+            /*
+             * Stop the Sketchfab iframe completely.
+             *
+             * This is important because simply hiding the iframe
+             * can leave the 3D viewer running in the background.
+             */
+
+            iframe.src =
+                '';
+
+
+            /*
+             * Hide the viewer.
+             */
+
+            viewer.style.display =
+                'none';
+
+
+            /*
+             * Stop the idle timer.
+             */
+
+            clearTimeout(
+                idleTimer
+            );
+
+        }
+
+
+        /* =========================================================
+           VIEWER BACK BUTTON
+           ========================================================= */
+
+        function setupViewerBackButton() {
+
+            const backButton =
+                document.getElementById(
+                    'back'
+                );
+
+
+            /*
+             * Normal mouse / click support.
+             */
+
+            backButton.addEventListener(
+                'click',
+                function(event) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                    closeViewer();
+
+                }
+            );
+
+
+            /*
+             * Extra pointer support for touchscreen kiosks.
+             *
+             * This makes the button respond reliably to touch
+             * screens as well as a mouse.
+             */
+
+            backButton.addEventListener(
+                'pointerup',
+                function(event) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                }
+            );
+
+        }
+
+
+        /* =========================================================
+           IDLE TIMER
+           ========================================================= */
+
+        let idleTimer =
+            null;
+
+        const IDLE_TIME =
+            90000;
+
+
+        function resetIdleTimer() {
+
+            clearTimeout(
+                idleTimer
+            );
+
+            const viewer =
+                document.getElementById(
+                    'viewer'
+                );
+
+            if (
+                viewer.style.display !==
+                'block'
+            ) {
+
+                return;
+
+            }
+
+            idleTimer =
+                setTimeout(
+                    closeViewer,
+                    IDLE_TIME
+                );
+
+        }
+
+
+        /* =========================================================
+           POINTER ACTIVITY
+           ========================================================= */
+
+        document.addEventListener(
+            'pointerdown',
+            function(event) {
+
+                /*
+                 * Do not interfere with the viewer Back button.
+                 */
+
+                if (
+                    event.target.id ===
+                    'back'
+                ) {
+
+                    return;
+
+                }
+
+                resetIdleTimer();
+
+            },
+            {
+                passive: true
+            }
+        );
+
+
+        document.addEventListener(
+            'pointermove',
+            resetIdleTimer,
+            {
+                passive: true
+            }
+        );
+
+
+        document.addEventListener(
+            'touchstart',
+            resetIdleTimer,
+            {
+                passive: true
+            }
+        );
+
+
+        /* =========================================================
+           CONTEXT MENU
+           ========================================================= */
+
+        document.addEventListener(
+            'contextmenu',
+            event => {
+
+                event.preventDefault();
+
+            }
+        );
+
+
+        /* =========================================================
+           DRAGGING
+           ========================================================= */
+
+        document.addEventListener(
+            'dragstart',
+            event => {
+
+                event.preventDefault();
+
+            }
+        );
+
+
+        /* =========================================================
+           KEYBOARD RESTRICTIONS
+           ========================================================= */
+
+        document.addEventListener(
+            'keydown',
+            event => {
+
+                if (
+
+                    event.key === 'F12' ||
+
+                    (
+                        event.ctrlKey &&
+                        (
+                            event.key.toLowerCase() === 'u' ||
+                            event.key.toLowerCase() === 's' ||
+                            event.key.toLowerCase() === 'c'
+                        )
+                    ) ||
+
+                    (
+                        event.metaKey &&
+                        (
+                            event.key.toLowerCase() === 'u' ||
+                            event.key.toLowerCase() === 's' ||
+                            event.key.toLowerCase() === 'c'
+                        )
+                    )
+
+                ) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                }
+
+
+                /* =================================================
+                   ESCAPE — CLOSE VIEWER
+                   ================================================= */
+
+                if (
+                    event.key === 'Escape'
+                ) {
+
+                    const viewer =
+                        document.getElementById(
+                            'viewer'
+                        );
+
+                    if (
+                        viewer.style.display ===
+                        'block'
+                    ) {
+
+                        event.preventDefault();
+
+                        closeViewer();
+
+                    }
+
+                }
+
+            }
+        );
+
+
+        /* =========================================================
+           FULLSCREEN
+           ========================================================= */
+
+        function requestFullscreen() {
+
+            const elem =
+                document.documentElement;
+
+            if (
+                document.fullscreenElement
+            ) {
+
+                return;
+
+            }
+
+            if (
+                elem.requestFullscreen
+            ) {
+
+                elem.requestFullscreen()
+                    .catch(
+                        error => {
+
+                            console.warn(
+                                'Fullscreen request was not accepted:',
+                                error
+                            );
+
+                        }
+                    );
+
+            } else if (
+                elem.webkitRequestFullscreen
+            ) {
+
+                elem.webkitRequestFullscreen();
+
+            } else if (
+                elem.msRequestFullscreen
+            ) {
+
+                elem.msRequestFullscreen();
+
+            }
+
+        }
+
+
+        /* =========================================================
+           INITIALIZE
+           ========================================================= */
+
+        document.addEventListener(
+            'DOMContentLoaded',
+            async () => {
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * Connect the Back button to closeViewer()
+                 * before the user can open a model.
+                 */
+
+                setupViewerBackButton();
+
+
+                /*
+                 * Fetch all Sketchfab metadata.
+                 */
+
+                allModels =
+                    await fetchModelsMetadata();
+
+
+                /*
+                 * Calculate pages.
+                 */
+
+                totalPages =
+                    calculateTotalPages();
+
+
+                /*
+                 * Start on page 1.
+                 */
+
+                currentPage =
+                    0;
+
+
+                /*
+                 * Render gallery.
+                 */
+
+                renderPage();
+
+
+                /*
+                 * Request fullscreen.
+                 */
+
+                requestFullscreen();
+
+            }
+        );
+
+    </script>
+
+</body>
+
+</html>
