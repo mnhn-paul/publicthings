@@ -2,10 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
     <title>Sketchfab Museum Kiosk</title>
 
     <style>
+
         :root {
             --bg-color: #111;
             --text-color: #fff;
@@ -13,7 +18,6 @@
 
             --border-radius: 12px;
             --spacing: 20px;
-
             --page-padding: 20px;
 
             --columns: 4;
@@ -26,9 +30,11 @@
             --page-button-size: 60px;
         }
 
+
         * {
             margin: 0;
             padding: 0;
+
             box-sizing: border-box;
 
             user-select: none;
@@ -39,6 +45,7 @@
             -webkit-touch-callout: none;
         }
 
+
         html,
         body {
             width: 100%;
@@ -46,6 +53,7 @@
 
             overflow: hidden;
         }
+
 
         body {
             font-family: Arial, sans-serif;
@@ -60,6 +68,7 @@
 
             touch-action: manipulation;
         }
+
 
         /* =========================================================
            GALLERY PAGE
@@ -88,14 +97,20 @@
             display: grid;
 
             grid-template-columns:
-                repeat(var(--columns), 1fr);
+                repeat(4, minmax(0, 1fr));
 
             grid-template-rows:
-                repeat(var(--rows), 1fr);
+                repeat(3, minmax(0, 1fr));
 
             gap: var(--spacing);
 
             overflow: hidden;
+
+            /*
+             * This is important for predictable placement.
+             * Cards are placed left-to-right, then top-to-bottom.
+             */
+            grid-auto-flow: row;
         }
 
 
@@ -124,6 +139,7 @@
                 box-shadow 200ms ease;
         }
 
+
         .card:active {
             transform: scale(0.98);
         }
@@ -133,9 +149,18 @@
            FEATURED CARD
            ========================================================= */
 
+        /*
+         * The first card occupies:
+         *
+         * columns 1-2
+         * rows 1-2
+         *
+         * leaving exactly 8 normal cells.
+         */
+
         .card.featured {
-            grid-column: span 2;
-            grid-row: span 2;
+            grid-column: 1 / span 2;
+            grid-row: 1 / span 2;
         }
 
 
@@ -169,6 +194,7 @@
             bottom: 0;
 
             padding: 14px 16px;
+            padding-top: 30px;
 
             background:
                 linear-gradient(
@@ -183,8 +209,6 @@
 
             text-align: center;
 
-            padding-top: 30px;
-
             pointer-events: none;
         }
 
@@ -195,6 +219,7 @@
 
         .card.featured .card-title {
             font-size: 1.3rem;
+
             font-weight: bold;
 
             padding-bottom: 18px;
@@ -251,6 +276,7 @@
             box-shadow:
                 0 3px 10px rgba(0, 0, 0, 0.4);
         }
+
 
         #previous-page:active,
         #next-page:active {
@@ -336,6 +362,7 @@
             touch-action: manipulation;
         }
 
+
         #back:active {
             transform: scale(0.96);
         }
@@ -374,7 +401,7 @@
 
 
         /* =========================================================
-           SMALL SCREEN FALLBACK
+           SMALL SCREEN
            ========================================================= */
 
         @media (max-width: 800px) {
@@ -406,16 +433,15 @@
         <div id="gallery"></div>
 
 
-        <!-- =====================================================
-             PAGE NAVIGATION
-             ===================================================== -->
+        <!-- PAGE NAVIGATION -->
 
         <div id="page-navigation">
 
             <button
                 id="previous-page"
                 type="button"
-                aria-label="Previous page">
+                aria-label="Previous page"
+            >
                 ←
             </button>
 
@@ -426,7 +452,8 @@
             <button
                 id="next-page"
                 type="button"
-                aria-label="Next page">
+                aria-label="Next page"
+            >
                 →
             </button>
 
@@ -443,7 +470,8 @@
 
         <button
             id="back"
-            type="button">
+            type="button"
+        >
             ← Back
         </button>
 
@@ -460,8 +488,8 @@
                 xr-spatial-tracking
                 execution-while-out-of-viewport
                 execution-while-not-rendered
-                web-share>
-            </iframe>
+                web-share
+            ></iframe>
 
         </div>
 
@@ -475,6 +503,7 @@
            ========================================================= */
 
         const MODEL_IDS = [
+
             '56816fb55d054bdc9ecd6ea6b35b44c1',
             '1dc0a7826fdd4279b8041fab6c370d07',
             'ebc60a9ceed249f186bc42bf67799708',
@@ -487,28 +516,38 @@
             '14c2c0388b4547df9c68afe943417cf6',
             '36df73258ec14448b67ba1859051c55c',
             '457e199b78d6486585075aa9647f984f',
-            '44f769f570fd462db821a6ce6c96ba7a',
             'e24c52fb47db43b286ac92153e771c2c',
             '9b26c1d0988944b8aa995efce447c00b',
             '2a4a2c6702494bb6a220576773ca5f94',
-            '14651059da2b4c1db1ca296920a3062a',
-            '14c2c0388b4547df9c68afe943417cf6',
-            '36df73258ec14448b67ba1859051c55c',
-            '457e199b78d6486585075aa9647f984f',
-            '44f769f570fd462db821a6ce6c96ba7a',
-            'e24c52fb47db43b286ac92153e771c2c',
-            '9b26c1d0988944b8aa995efce447c00b',
-            '2a4a2c6702494bb6a220576773ca5f94'
+            'a74e3e5875aa4753a83ab33046df4a24',
+            'b601dfa5059f4c6db0fa1f4073ecdfbd',
+            '23070846626f400e800260f55cba64b2',
+            '10eeac82b75a46acaecca3e14d2e3e4d',
+            'c79ad6ffe00942f68e62855e4ba252e4',
+            '983b750b515d4a1097fd84404646cabc',
+
         ];
 
 
         /* =========================================================
-           PAGINATION
+           PAGINATION SETTINGS
            ========================================================= */
 
-        let currentPage = 0;
+        /*
+         * PAGE 1:
+         *
+         * 1 featured + 8 normal = 9 models
+         *
+         * PAGE 2+:
+         *
+         * 12 normal models
+         */
 
-        let modelsPerPage = 9;
+        const FIRST_PAGE_SIZE = 9;
+        const NORMAL_PAGE_SIZE = 12;
+
+
+        let currentPage = 0;
 
         let totalPages = 1;
 
@@ -516,7 +555,7 @@
 
 
         /* =========================================================
-           PLACEHOLDER
+           PLACEHOLDER IMAGE
            ========================================================= */
 
         const placeholderImage =
@@ -528,12 +567,101 @@
 
 
         /* =========================================================
+           GET PAGE SIZE
+           ========================================================= */
+
+        function getPageSize(page) {
+
+            /*
+             * Page 0 = 9
+             * All other pages = 12
+             */
+
+            return page === 0
+                ? FIRST_PAGE_SIZE
+                : NORMAL_PAGE_SIZE;
+        }
+
+
+        /* =========================================================
+           GET PAGE START INDEX
+           ========================================================= */
+
+        function getPageStart(page) {
+
+            /*
+             * Page 0 starts at model 0.
+             *
+             * Page 1 starts after the first 9 models.
+             *
+             * Every page after that advances by 12.
+             */
+
+            if (page === 0) {
+                return 0;
+            }
+
+            return (
+                FIRST_PAGE_SIZE +
+                (page - 1) * NORMAL_PAGE_SIZE
+            );
+        }
+
+
+        /* =========================================================
+           CALCULATE TOTAL PAGES
+           ========================================================= */
+
+        function calculateTotalPages() {
+
+            if (allModels.length === 0) {
+                return 1;
+            }
+
+
+            /*
+             * First page contains 9.
+             */
+
+            if (allModels.length <= FIRST_PAGE_SIZE) {
+                return 1;
+            }
+
+
+            /*
+             * Remaining models are arranged in groups of 12.
+             */
+
+            const remaining =
+                allModels.length -
+                FIRST_PAGE_SIZE;
+
+
+            return (
+                1 +
+                Math.ceil(
+                    remaining /
+                    NORMAL_PAGE_SIZE
+                )
+            );
+        }
+
+
+        /* =========================================================
            FETCH MODEL METADATA
            ========================================================= */
 
         async function fetchModelsMetadata() {
 
             const models = [];
+
+
+            /*
+             * Fetch sequentially.
+             *
+             * This is slower than Promise.all(), but avoids
+             * hammering the Sketchfab API when used as a kiosk.
+             */
 
             for (const modelId of MODEL_IDS) {
 
@@ -544,16 +672,21 @@
                             `https://api.sketchfab.com/v3/models/${modelId}`
                         );
 
+
                     if (!response.ok) {
+
                         throw new Error(
                             `HTTP ${response.status}`
                         );
                     }
 
+
                     const data =
                         await response.json();
 
+
                     models.push({
+
                         uid: modelId,
 
                         title:
@@ -564,7 +697,9 @@
                             data.thumbnails
                                 ?.images?.[0]?.url ||
                             null
+
                     });
+
 
                 } catch (error) {
 
@@ -573,15 +708,19 @@
                         error
                     );
 
+
                     models.push({
+
                         uid: modelId,
 
                         title: 'Untitled',
 
                         thumbnail: null
+
                     });
                 }
             }
+
 
             return models;
         }
@@ -594,83 +733,141 @@
         function renderPage() {
 
             const gallery =
-                document.getElementById('gallery');
+                document.getElementById(
+                    'gallery'
+                );
+
 
             gallery.innerHTML = '';
 
 
             /*
-             * Calculate the models displayed on this page.
+             * Determine exactly where this page starts.
              */
 
             const start =
-                currentPage * modelsPerPage;
-
-            const end =
-                Math.min(
-                    start + modelsPerPage,
-                    allModels.length
+                getPageStart(
+                    currentPage
                 );
-
-            const pageModels =
-                allModels.slice(start, end);
 
 
             /*
-             * Create cards.
+             * Determine how many models this page gets.
              */
+
+            const pageSize =
+                getPageSize(
+                    currentPage
+                );
+
+
+            const end =
+                Math.min(
+                    start + pageSize,
+                    allModels.length
+                );
+
+
+            const pageModels =
+                allModels.slice(
+                    start,
+                    end
+                );
+
+
+            /*
+             * Safety check.
+             */
+
+            if (pageModels.length === 0) {
+                updatePagination();
+                return;
+            }
+
+
+            /* =====================================================
+               CREATE CARDS
+               ===================================================== */
 
             pageModels.forEach(
                 (model, index) => {
 
                     const card =
-                        document.createElement('div');
+                        document.createElement(
+                            'div'
+                        );
 
-                    card.className = 'card';
+
+                    card.className =
+                        'card';
 
 
                     /*
-                     * The first model on the FIRST page
-                     * is the featured 2x2 model.
+                     * ONLY the first model of the first page
+                     * becomes the 2x2 featured model.
                      */
 
                     if (
                         currentPage === 0 &&
                         index === 0
                     ) {
+
                         card.classList.add(
                             'featured'
                         );
                     }
 
 
+                    /* IMAGE */
+
                     const image =
-                        document.createElement('img');
+                        document.createElement(
+                            'img'
+                        );
+
 
                     image.src =
                         model.thumbnail ||
                         placeholderImage;
 
+
                     image.alt =
                         model.title;
 
-                    image.draggable = false;
 
+                    image.draggable =
+                        false;
+
+
+                    /* TITLE */
 
                     const title =
-                        document.createElement('div');
+                        document.createElement(
+                            'div'
+                        );
+
 
                     title.className =
                         'card-title';
+
 
                     title.textContent =
                         model.title;
 
 
-                    card.appendChild(image);
+                    /* ASSEMBLE CARD */
 
-                    card.appendChild(title);
+                    card.appendChild(
+                        image
+                    );
 
+
+                    card.appendChild(
+                        title
+                    );
+
+
+                    /* CLICK */
 
                     card.addEventListener(
                         'click',
@@ -680,11 +877,15 @@
                                 model.uid,
                                 model.title
                             );
+
                         }
                     );
 
 
-                    gallery.appendChild(card);
+                    gallery.appendChild(
+                        card
+                    );
+
                 }
             );
 
@@ -704,10 +905,12 @@
                     'page-indicator'
                 );
 
+
             const previous =
                 document.getElementById(
                     'previous-page'
                 );
+
 
             const next =
                 document.getElementById(
@@ -715,32 +918,53 @@
                 );
 
 
+            /*
+             * Recalculate total pages.
+             */
+
             totalPages =
-                Math.ceil(
-                    allModels.length /
-                    modelsPerPage
-                );
+                calculateTotalPages();
 
 
-            if (totalPages < 1) {
-                totalPages = 1;
+            /*
+             * Make sure current page is valid.
+             */
+
+            if (
+                currentPage >= totalPages
+            ) {
+
+                currentPage =
+                    totalPages - 1;
             }
 
+
+            if (currentPage < 0) {
+                currentPage = 0;
+            }
+
+
+            /* PAGE INDICATOR */
 
             indicator.textContent =
                 `${currentPage + 1} / ${totalPages}`;
 
 
+            /* PREVIOUS */
+
             previous.disabled =
                 currentPage === 0;
 
 
+            /* NEXT */
+
             next.disabled =
-                currentPage >= totalPages - 1;
+                currentPage >=
+                totalPages - 1;
 
 
             /*
-             * Hide navigation completely if there is
+             * Hide navigation when there is
              * only one page.
              */
 
@@ -748,6 +972,7 @@
                 document.getElementById(
                     'page-navigation'
                 );
+
 
             navigation.style.display =
                 totalPages > 1
@@ -802,39 +1027,31 @@
         function openModel(uid, title) {
 
             const viewer =
-                document.getElementById('viewer');
+                document.getElementById(
+                    'viewer'
+                );
+
 
             const iframe =
-                document.getElementById('iframe');
+                document.getElementById(
+                    'iframe'
+                );
 
 
             const embedUrl =
                 `https://sketchfab.com/models/${uid}/embed` +
-
                 `?autostart=1` +
-
                 `&ui_animations=0` +
-
                 `&ui_infos=0` +
-
                 `&ui_stop=0` +
-
                 `&ui_inspector=0` +
-
                 `&ui_watermark_link=0` +
-
                 `&ui_watermark=0` +
-
                 `&ui_ar=0` +
-
                 `&ui_help=0` +
-
                 `&ui_settings=0` +
-
                 `&ui_vr=0` +
-
                 `&ui_fullscreen=0` +
-
                 `&ui_annotations=0`;
 
 
@@ -857,10 +1074,15 @@
         function closeViewer() {
 
             const viewer =
-                document.getElementById('viewer');
+                document.getElementById(
+                    'viewer'
+                );
+
 
             const iframe =
-                document.getElementById('iframe');
+                document.getElementById(
+                    'iframe'
+                );
 
 
             iframe.src = '';
@@ -882,8 +1104,7 @@
 
         let idleTimer = null;
 
-        const IDLE_TIME =
-            90000;
+        const IDLE_TIME = 90000;
 
 
         function resetIdleTimer() {
@@ -894,13 +1115,16 @@
 
 
             const viewer =
-                document.getElementById('viewer');
+                document.getElementById(
+                    'viewer'
+                );
 
 
             if (
                 viewer.style.display !==
                 'block'
             ) {
+
                 return;
             }
 
@@ -945,7 +1169,9 @@
         document.addEventListener(
             'contextmenu',
             event => {
+
                 event.preventDefault();
+
             }
         );
 
@@ -957,7 +1183,9 @@
         document.addEventListener(
             'dragstart',
             event => {
+
                 event.preventDefault();
+
             }
         );
 
@@ -1014,6 +1242,7 @@
                             'viewer'
                         );
 
+
                     if (
                         viewer.style.display ===
                         'block'
@@ -1024,6 +1253,7 @@
                         resetIdleTimer();
                     }
                 }
+
             }
         );
 
@@ -1041,6 +1271,7 @@
             if (
                 document.fullscreenElement
             ) {
+
                 return;
             }
 
@@ -1050,14 +1281,16 @@
             ) {
 
                 elem.requestFullscreen()
-                    .catch(error => {
+                    .catch(
+                        error => {
 
-                        console.warn(
-                            'Fullscreen request was not accepted:',
-                            error
-                        );
+                            console.warn(
+                                'Fullscreen request was not accepted:',
+                                error
+                            );
 
-                    });
+                        }
+                    );
 
             } else if (
                 elem.webkitRequestFullscreen
@@ -1079,7 +1312,9 @@
            ========================================================= */
 
         document
-            .getElementById('next-page')
+            .getElementById(
+                'next-page'
+            )
             .addEventListener(
                 'click',
                 nextPage
@@ -1087,7 +1322,9 @@
 
 
         document
-            .getElementById('previous-page')
+            .getElementById(
+                'previous-page'
+            )
             .addEventListener(
                 'click',
                 previousPage
@@ -1095,7 +1332,9 @@
 
 
         document
-            .getElementById('back')
+            .getElementById(
+                'back'
+            )
             .addEventListener(
                 'click',
                 closeViewer
@@ -1114,25 +1353,18 @@
                     await fetchModelsMetadata();
 
 
-                /*
-                 * We use 9 models per page:
-                 *
-                 * Featured model = 2x2
-                 * Remaining space = 8 normal tiles
-                 *
-                 * Total grid = 4 columns x 3 rows
-                 */
-
-                modelsPerPage = 9;
-
-
                 currentPage = 0;
+
+
+                totalPages =
+                    calculateTotalPages();
 
 
                 renderPage();
 
 
                 requestFullscreen();
+
             }
         );
 
