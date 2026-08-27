@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0"
@@ -9,64 +12,171 @@
 
     <title>Sketchfab Museum Kiosk</title>
 
+
+    <!-- =========================================================
+         GOOGLE FONT — INTER
+         ========================================================= -->
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+
     <style>
 
+        /* =========================================================
+           THEME
+           ========================================================= */
+
         :root {
-            --bg-color: #111;
-            --text-color: #fff;
-            --card-bg: #222;
+
+            /*
+             * Main museum/kiosk background
+             */
+
+            --bg-color: #001c26;
+
+
+            /*
+             * Text
+             */
+
+            --text-color: #ffffff;
+            --muted-text-color: rgba(255, 255, 255, 0.75);
+
+
+            /*
+             * Card background
+             */
+
+            --card-bg: #0b2a33;
+
+
+            /*
+             * Accent colours
+             */
+
+            --accent-purple: #9999cc;
+            --accent-red: #FF6666;
+            --accent-green: #99cc99;
+
+
+            /*
+             * Borders / subtle UI
+             */
+
+            --border-color: rgba(255, 255, 255, 0.12);
+
+
+            /*
+             * Layout
+             */
 
             --border-radius: 12px;
+
             --spacing: 20px;
+
             --page-padding: 20px;
 
             --columns: 4;
+
             --rows: 3;
 
-            --font-size: 1rem;
 
-            --placeholder-color: #444;
+            /*
+             * IMPORTANT:
+             *
+             * This is the title size for EVERY card.
+             *
+             * Featured and normal cards intentionally
+             * use the exact same title styling.
+             */
+
+            --title-size: 1.5rem;
+
+            --title-weight: 500;
+
+
+            /*
+             * Navigation
+             */
 
             --page-button-size: 60px;
+
         }
 
 
+        /* =========================================================
+           GLOBAL RESET
+           ========================================================= */
+
         * {
+
             margin: 0;
+
             padding: 0;
 
             box-sizing: border-box;
 
+
             user-select: none;
+
             -webkit-user-select: none;
+
             -moz-user-select: none;
+
             -ms-user-select: none;
 
             -webkit-touch-callout: none;
+
         }
 
 
         html,
         body {
+
             width: 100%;
+
             height: 100%;
 
             overflow: hidden;
+
         }
 
 
         body {
-            font-family: Arial, sans-serif;
 
-            background: var(--bg-color);
-            color: var(--text-color);
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            background:
+                var(--bg-color);
+
+            color:
+                var(--text-color);
 
             width: 100vw;
+
             height: 100vh;
 
             overflow: hidden;
 
             touch-action: manipulation;
+
         }
 
 
@@ -75,14 +185,21 @@
            ========================================================= */
 
         #gallery-page {
+
             position: relative;
 
             width: 100vw;
+
             height: 100vh;
 
-            padding: var(--page-padding);
+            padding:
+                var(--page-padding);
 
             overflow: hidden;
+
+            background:
+                var(--bg-color);
+
         }
 
 
@@ -91,26 +208,32 @@
            ========================================================= */
 
         #gallery {
+
             width: 100%;
+
             height: 100%;
 
             display: grid;
 
             grid-template-columns:
-                repeat(4, minmax(0, 1fr));
+                repeat(
+                    4,
+                    minmax(0, 1fr)
+                );
 
             grid-template-rows:
-                repeat(3, minmax(0, 1fr));
+                repeat(
+                    3,
+                    minmax(0, 1fr)
+                );
 
-            gap: var(--spacing);
+            gap:
+                var(--spacing);
 
             overflow: hidden;
 
-            /*
-             * This is important for predictable placement.
-             * Cards are placed left-to-right, then top-to-bottom.
-             */
             grid-auto-flow: row;
+
         }
 
 
@@ -119,29 +242,42 @@
            ========================================================= */
 
         .card {
+
             position: relative;
 
-            background: var(--card-bg);
+            background:
+                var(--card-bg);
 
-            border-radius: var(--border-radius);
+            border-radius:
+                var(--border-radius);
 
             overflow: hidden;
 
             cursor: pointer;
 
             min-width: 0;
+
             min-height: 0;
 
             touch-action: manipulation;
 
+            border:
+                1px solid
+                var(--border-color);
+
             transition:
                 transform 200ms ease,
-                box-shadow 200ms ease;
+                box-shadow 200ms ease,
+                border-color 200ms ease;
+
         }
 
 
         .card:active {
-            transform: scale(0.98);
+
+            transform:
+                scale(0.98);
+
         }
 
 
@@ -150,17 +286,22 @@
            ========================================================= */
 
         /*
-         * The first card occupies:
+         * The featured card occupies exactly:
          *
-         * columns 1-2
-         * rows 1-2
+         * 2 columns
+         * 2 rows
          *
-         * leaving exactly 8 normal cells.
+         * It is therefore a true 2x2 card.
          */
 
         .card.featured {
-            grid-column: 1 / span 2;
-            grid-row: 1 / span 2;
+
+            grid-column:
+                1 / span 2;
+
+            grid-row:
+                1 / span 2;
+
         }
 
 
@@ -169,16 +310,20 @@
            ========================================================= */
 
         .card img {
+
             display: block;
 
             width: 100%;
+
             height: 100%;
 
             object-fit: cover;
 
-            background: var(--placeholder-color);
+            background:
+                #163840;
 
             pointer-events: none;
+
         }
 
 
@@ -186,44 +331,70 @@
            CARD TITLE
            ========================================================= */
 
-        .card-title {
-            position: absolute;
+        /*
+         * IMPORTANT:
+         *
+         * There is ONLY ONE title style.
+         *
+         * The featured card does NOT override it.
+         *
+         * This guarantees that titles are always identical
+         * regardless of card size.
+         */
 
-            left: 0;
-            right: 0;
-            bottom: 0;
+		.card-title {
 
-            padding: 14px 16px;
-            padding-top: 30px;
+			position: absolute;
 
-            background:
-                linear-gradient(
-                    to top,
-                    rgba(0, 0, 0, 0.85),
-                    rgba(0, 0, 0, 0)
-                );
+			left: 0;
+			right: 0;
+			top: 0;
 
-            font-size: var(--font-size);
+			padding: 14px 16px 30px 16px;
 
-            line-height: 1.3;
+			background:
+				linear-gradient(
+					to bottom,
+					rgba(0, 28, 38, 0.95),
+					rgba(0, 28, 38, 0.65),
+					rgba(0, 28, 38, 0)
+				);
 
-            text-align: center;
+			font-family:
+				'Inter',
+				Arial,
+				sans-serif;
 
-            pointer-events: none;
-        }
+			font-size:
+				var(--title-size);
+
+			font-weight:
+				var(--title-weight);
+
+			line-height:
+				1.3;
+
+			color:
+				#ffffff;
+
+			text-align:
+				center;
+
+			pointer-events:
+				none;
+		}
 
 
-        /* =========================================================
-           FEATURED TITLE
-           ========================================================= */
-
-        .card.featured .card-title {
-            font-size: 1.3rem;
-
-            font-weight: bold;
-
-            padding-bottom: 18px;
-        }
+        /*
+         * INTENTIONALLY NO:
+         *
+         * .card.featured .card-title
+         *
+         * override.
+         *
+         * This means the featured title is exactly the same
+         * size as every other title.
+         */
 
 
         /* =========================================================
@@ -231,64 +402,135 @@
            ========================================================= */
 
         #page-navigation {
+
             position: absolute;
 
             left: 50%;
+
             bottom: 20px;
 
-            transform: translateX(-50%);
+            transform:
+                translateX(-50%);
 
             display: flex;
 
             align-items: center;
+
             justify-content: center;
 
             gap: 15px;
 
             z-index: 5;
+
         }
 
 
+        /* =========================================================
+           NAVIGATION BUTTONS
+           ========================================================= */
+
         #previous-page,
         #next-page {
-            width: var(--page-button-size);
-            height: var(--page-button-size);
 
-            border: none;
+            width:
+                var(--page-button-size);
 
-            border-radius: 50%;
+            height:
+                var(--page-button-size);
 
-            background: rgba(34, 34, 34, 0.95);
+            border:
+                2px solid
+                var(--accent-purple);
 
-            color: white;
+            border-radius:
+                50%;
 
-            font-size: 1.8rem;
+            background:
+                var(--bg-color);
 
-            cursor: pointer;
+            color:
+                var(--accent-purple);
 
-            display: flex;
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
 
-            align-items: center;
-            justify-content: center;
+            font-size:
+                1.8rem;
 
-            touch-action: manipulation;
+            font-weight:
+                500;
+
+            cursor:
+                pointer;
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                center;
+
+            touch-action:
+                manipulation;
 
             box-shadow:
-                0 3px 10px rgba(0, 0, 0, 0.4);
+                0 4px 15px
+                rgba(0, 0, 0, 0.35);
+
+            transition:
+                background 150ms ease,
+                color 150ms ease,
+                transform 150ms ease;
+
+        }
+
+
+        #previous-page:hover,
+        #next-page:hover {
+
+            background:
+                var(--accent-purple);
+
+            color:
+                var(--bg-color);
+
         }
 
 
         #previous-page:active,
         #next-page:active {
-            transform: scale(0.92);
+
+            transform:
+                scale(0.92);
+
         }
 
 
         #previous-page:disabled,
         #next-page:disabled {
-            opacity: 0.25;
 
-            cursor: default;
+            opacity:
+                0.25;
+
+            cursor:
+                default;
+
+        }
+
+
+        #previous-page:disabled:hover,
+        #next-page:disabled:hover {
+
+            background:
+                var(--bg-color);
+
+            color:
+                var(--accent-purple);
+
         }
 
 
@@ -297,17 +539,40 @@
            ========================================================= */
 
         #page-indicator {
-            min-width: 80px;
 
-            padding: 10px 15px;
+            min-width:
+                80px;
 
-            border-radius: 20px;
+            padding:
+                10px 15px;
 
-            background: rgba(34, 34, 34, 0.95);
+            border-radius:
+                20px;
 
-            text-align: center;
+            background:
+                rgba(255, 255, 255, 0.08);
 
-            font-size: 1rem;
+            border:
+                1px solid
+                rgba(255, 255, 255, 0.12);
+
+            color:
+                var(--text-color);
+
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            font-size:
+                0.95rem;
+
+            font-weight:
+                500;
+
+            text-align:
+                center;
+
         }
 
 
@@ -316,20 +581,31 @@
            ========================================================= */
 
         #viewer {
-            display: none;
 
-            position: fixed;
+            display:
+                none;
 
-            inset: 0;
+            position:
+                fixed;
 
-            width: 100vw;
-            height: 100vh;
+            inset:
+                0;
 
-            background: #000;
+            width:
+                100vw;
 
-            z-index: 10;
+            height:
+                100vh;
 
-            overflow: hidden;
+            background:
+                #000;
+
+            z-index:
+                10;
+
+            overflow:
+                hidden;
+
         }
 
 
@@ -338,33 +614,71 @@
            ========================================================= */
 
         #back {
-            position: absolute;
 
-            top: 15px;
-            left: 15px;
+            position:
+                absolute;
 
-            z-index: 20;
+            top:
+                15px;
 
-            padding: 12px 18px;
+            left:
+                15px;
 
-            background: rgba(34, 34, 34, 0.95);
+            z-index:
+                20;
 
-            border: none;
+            padding:
+                12px 18px;
 
-            color: white;
+            background:
+                var(--accent-purple);
 
-            font-size: 1.2rem;
+            border:
+                none;
 
-            cursor: pointer;
+            color:
+                var(--bg-color);
 
-            border-radius: var(--border-radius);
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
 
-            touch-action: manipulation;
+            font-size:
+                1rem;
+
+            font-weight:
+                600;
+
+            cursor:
+                pointer;
+
+            border-radius:
+                var(--border-radius);
+
+            touch-action:
+                manipulation;
+
+            transition:
+                transform 150ms ease,
+                background 150ms ease;
+
+        }
+
+
+        #back:hover {
+
+            background:
+                var(--accent-green);
+
         }
 
 
         #back:active {
-            transform: scale(0.96);
+
+            transform:
+                scale(0.96);
+
         }
 
 
@@ -373,30 +687,48 @@
            ========================================================= */
 
         #iframe-wrapper {
-            position: absolute;
 
-            inset: 0;
+            position:
+                absolute;
 
-            width: 100%;
-            height: 100%;
+            inset:
+                0;
 
-            background: #000;
+            width:
+                100%;
+
+            height:
+                100%;
+
+            background:
+                #000;
+
         }
 
 
         #iframe {
-            position: absolute;
 
-            inset: 0;
+            position:
+                absolute;
 
-            width: 100%;
-            height: 100%;
+            inset:
+                0;
 
-            border: 0;
+            width:
+                100%;
 
-            display: block;
+            height:
+                100%;
 
-            pointer-events: auto;
+            border:
+                0;
+
+            display:
+                block;
+
+            pointer-events:
+                auto;
+
         }
 
 
@@ -407,17 +739,39 @@
         @media (max-width: 800px) {
 
             :root {
+
                 --spacing: 10px;
+
                 --page-padding: 10px;
+
+                --title-size: 1rem;
+
             }
 
+
             #page-navigation {
-                bottom: 10px;
+
+                bottom:
+                    10px;
+
+            }
+
+
+            #previous-page,
+            #next-page {
+
+                width:
+                    50px;
+
+                height:
+                    50px;
+
             }
 
         }
 
     </style>
+
 </head>
 
 
@@ -433,7 +787,9 @@
         <div id="gallery"></div>
 
 
-        <!-- PAGE NAVIGATION -->
+        <!-- =====================================================
+             PAGE NAVIGATION
+             ===================================================== -->
 
         <div id="page-navigation">
 
@@ -445,9 +801,11 @@
                 ←
             </button>
 
+
             <div id="page-indicator">
                 1 / 1
             </div>
+
 
             <button
                 id="next-page"
@@ -474,6 +832,7 @@
         >
             ← Back
         </button>
+
 
         <div id="iframe-wrapper">
 
@@ -513,37 +872,24 @@
             '377b3b9e288d4265b5de8d95f897a5eb',
             '90318595f90541af8ffb6b5edb855c77',
             '14651059da2b4c1db1ca296920a3062a',
+
             '14c2c0388b4547df9c68afe943417cf6',
             '36df73258ec14448b67ba1859051c55c',
             '457e199b78d6486585075aa9647f984f',
+            '44f769f570fd462db821a6ce6c96ba7a',
             'e24c52fb47db43b286ac92153e771c2c',
             '9b26c1d0988944b8aa995efce447c00b',
-            '2a4a2c6702494bb6a220576773ca5f94',
-            'a74e3e5875aa4753a83ab33046df4a24',
-            'b601dfa5059f4c6db0fa1f4073ecdfbd',
-            '23070846626f400e800260f55cba64b2',
-            '10eeac82b75a46acaecca3e14d2e3e4d',
-            'c79ad6ffe00942f68e62855e4ba252e4',
-            '983b750b515d4a1097fd84404646cabc',
+            '2a4a2c6702494bb6a220576773ca5f94'
 
         ];
 
 
         /* =========================================================
-           PAGINATION SETTINGS
+           PAGINATION
            ========================================================= */
 
-        /*
-         * PAGE 1:
-         *
-         * 1 featured + 8 normal = 9 models
-         *
-         * PAGE 2+:
-         *
-         * 12 normal models
-         */
-
         const FIRST_PAGE_SIZE = 9;
+
         const NORMAL_PAGE_SIZE = 12;
 
 
@@ -555,82 +901,76 @@
 
 
         /* =========================================================
-           PLACEHOLDER IMAGE
+           PLACEHOLDER
            ========================================================= */
 
         const placeholderImage =
             'data:image/svg+xml;utf8,' +
             '<svg xmlns="http://www.w3.org/2000/svg" ' +
             'width="1920" height="1080" viewBox="0 0 1920 1080">' +
-            '<rect width="1920" height="1080" fill="%23444"/>' +
+            '<rect width="1920" height="1080" fill="%23163840"/>' +
             '</svg>';
 
 
         /* =========================================================
-           GET PAGE SIZE
+           PAGE SIZE
            ========================================================= */
 
         function getPageSize(page) {
 
-            /*
-             * Page 0 = 9
-             * All other pages = 12
-             */
-
             return page === 0
                 ? FIRST_PAGE_SIZE
                 : NORMAL_PAGE_SIZE;
+
         }
 
 
         /* =========================================================
-           GET PAGE START INDEX
+           PAGE START
            ========================================================= */
 
         function getPageStart(page) {
 
-            /*
-             * Page 0 starts at model 0.
-             *
-             * Page 1 starts after the first 9 models.
-             *
-             * Every page after that advances by 12.
-             */
-
             if (page === 0) {
+
                 return 0;
+
             }
+
 
             return (
                 FIRST_PAGE_SIZE +
-                (page - 1) * NORMAL_PAGE_SIZE
+                (page - 1) *
+                NORMAL_PAGE_SIZE
             );
+
         }
 
 
         /* =========================================================
-           CALCULATE TOTAL PAGES
+           TOTAL PAGES
            ========================================================= */
 
         function calculateTotalPages() {
 
-            if (allModels.length === 0) {
+            if (
+                allModels.length === 0
+            ) {
+
                 return 1;
+
             }
 
 
-            /*
-             * First page contains 9.
-             */
+            if (
+                allModels.length <=
+                FIRST_PAGE_SIZE
+            ) {
 
-            if (allModels.length <= FIRST_PAGE_SIZE) {
                 return 1;
+
             }
 
-
-            /*
-             * Remaining models are arranged in groups of 12.
-             */
 
             const remaining =
                 allModels.length -
@@ -644,6 +984,7 @@
                     NORMAL_PAGE_SIZE
                 )
             );
+
         }
 
 
@@ -656,14 +997,9 @@
             const models = [];
 
 
-            /*
-             * Fetch sequentially.
-             *
-             * This is slower than Promise.all(), but avoids
-             * hammering the Sketchfab API when used as a kiosk.
-             */
-
-            for (const modelId of MODEL_IDS) {
+            for (
+                const modelId of MODEL_IDS
+            ) {
 
                 try {
 
@@ -678,6 +1014,7 @@
                         throw new Error(
                             `HTTP ${response.status}`
                         );
+
                     }
 
 
@@ -687,7 +1024,8 @@
 
                     models.push({
 
-                        uid: modelId,
+                        uid:
+                            modelId,
 
                         title:
                             data.name ||
@@ -711,23 +1049,29 @@
 
                     models.push({
 
-                        uid: modelId,
+                        uid:
+                            modelId,
 
-                        title: 'Untitled',
+                        title:
+                            'Untitled',
 
-                        thumbnail: null
+                        thumbnail:
+                            null
 
                     });
+
                 }
+
             }
 
 
             return models;
+
         }
 
 
         /* =========================================================
-           RENDER CURRENT PAGE
+           RENDER PAGE
            ========================================================= */
 
         function renderPage() {
@@ -741,19 +1085,11 @@
             gallery.innerHTML = '';
 
 
-            /*
-             * Determine exactly where this page starts.
-             */
-
             const start =
                 getPageStart(
                     currentPage
                 );
 
-
-            /*
-             * Determine how many models this page gets.
-             */
 
             const pageSize =
                 getPageSize(
@@ -775,20 +1111,6 @@
                 );
 
 
-            /*
-             * Safety check.
-             */
-
-            if (pageModels.length === 0) {
-                updatePagination();
-                return;
-            }
-
-
-            /* =====================================================
-               CREATE CARDS
-               ===================================================== */
-
             pageModels.forEach(
                 (model, index) => {
 
@@ -803,8 +1125,8 @@
 
 
                     /*
-                     * ONLY the first model of the first page
-                     * becomes the 2x2 featured model.
+                     * ONLY the first card on page 1
+                     * gets the 2x2 layout.
                      */
 
                     if (
@@ -815,10 +1137,9 @@
                         card.classList.add(
                             'featured'
                         );
+
                     }
 
-
-                    /* IMAGE */
 
                     const image =
                         document.createElement(
@@ -839,8 +1160,6 @@
                         false;
 
 
-                    /* TITLE */
-
                     const title =
                         document.createElement(
                             'div'
@@ -855,8 +1174,6 @@
                         model.title;
 
 
-                    /* ASSEMBLE CARD */
-
                     card.appendChild(
                         image
                     );
@@ -866,8 +1183,6 @@
                         title
                     );
 
-
-                    /* CLICK */
 
                     card.addEventListener(
                         'click',
@@ -891,11 +1206,12 @@
 
 
             updatePagination();
+
         }
 
 
         /* =========================================================
-           UPDATE PAGINATION
+           PAGINATION UI
            ========================================================= */
 
         function updatePagination() {
@@ -918,55 +1234,42 @@
                 );
 
 
-            /*
-             * Recalculate total pages.
-             */
-
             totalPages =
                 calculateTotalPages();
 
 
-            /*
-             * Make sure current page is valid.
-             */
-
             if (
-                currentPage >= totalPages
+                currentPage >=
+                totalPages
             ) {
 
                 currentPage =
                     totalPages - 1;
+
             }
 
 
-            if (currentPage < 0) {
+            if (
+                currentPage < 0
+            ) {
+
                 currentPage = 0;
+
             }
 
-
-            /* PAGE INDICATOR */
 
             indicator.textContent =
                 `${currentPage + 1} / ${totalPages}`;
 
 
-            /* PREVIOUS */
-
             previous.disabled =
                 currentPage === 0;
 
-
-            /* NEXT */
 
             next.disabled =
                 currentPage >=
                 totalPages - 1;
 
-
-            /*
-             * Hide navigation when there is
-             * only one page.
-             */
 
             const navigation =
                 document.getElementById(
@@ -978,6 +1281,7 @@
                 totalPages > 1
                     ? 'flex'
                     : 'none';
+
         }
 
 
@@ -997,7 +1301,9 @@
                 renderPage();
 
                 resetIdleTimer();
+
             }
+
         }
 
 
@@ -1016,7 +1322,9 @@
                 renderPage();
 
                 resetIdleTimer();
+
             }
+
         }
 
 
@@ -1024,7 +1332,10 @@
            OPEN MODEL
            ========================================================= */
 
-        function openModel(uid, title) {
+        function openModel(
+            uid,
+            title
+        ) {
 
             const viewer =
                 document.getElementById(
@@ -1064,6 +1375,7 @@
 
 
             resetIdleTimer();
+
         }
 
 
@@ -1095,6 +1407,7 @@
             clearTimeout(
                 idleTimer
             );
+
         }
 
 
@@ -1104,7 +1417,9 @@
 
         let idleTimer = null;
 
-        const IDLE_TIME = 90000;
+
+        const IDLE_TIME =
+            90000;
 
 
         function resetIdleTimer() {
@@ -1126,6 +1441,7 @@
             ) {
 
                 return;
+
             }
 
 
@@ -1134,6 +1450,7 @@
                     closeViewer,
                     IDLE_TIME
                 );
+
         }
 
 
@@ -1225,13 +1542,9 @@
                     event.preventDefault();
 
                     event.stopPropagation();
+
                 }
 
-
-                /*
-                 * Escape does not close the viewer.
-                 * The Back button is used instead.
-                 */
 
                 if (
                     event.key === 'Escape'
@@ -1251,7 +1564,9 @@
                         event.preventDefault();
 
                         resetIdleTimer();
+
                     }
+
                 }
 
             }
@@ -1273,6 +1588,7 @@
             ) {
 
                 return;
+
             }
 
 
@@ -1292,18 +1608,22 @@
                         }
                     );
 
+
             } else if (
                 elem.webkitRequestFullscreen
             ) {
 
                 elem.webkitRequestFullscreen();
 
+
             } else if (
                 elem.msRequestFullscreen
             ) {
 
                 elem.msRequestFullscreen();
+
             }
+
         }
 
 
@@ -1371,4 +1691,5 @@
     </script>
 
 </body>
+
 </html>
