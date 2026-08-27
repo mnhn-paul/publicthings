@@ -42,47 +42,26 @@
 
         :root {
 
-            /*
-             * Main museum/kiosk background
-             */
-
             --bg-color: #001c26;
 
-
-            /*
-             * Text
-             */
-
             --text-color: #ffffff;
-            --muted-text-color: rgba(255, 255, 255, 0.75);
-
-
-            /*
-             * Card background
-             */
 
             --card-bg: #0b2a33;
 
+            --border-color:
+                rgba(255, 255, 255, 0.12);
 
-            /*
-             * Accent colours
-             */
+
+            /* Accent colours */
 
             --accent-purple: #9999cc;
+
             --accent-red: #FF6666;
+
             --accent-green: #99cc99;
 
 
-            /*
-             * Borders / subtle UI
-             */
-
-            --border-color: rgba(255, 255, 255, 0.12);
-
-
-            /*
-             * Layout
-             */
+            /* Layout */
 
             --border-radius: 12px;
 
@@ -95,25 +74,20 @@
             --rows: 3;
 
 
-            /*
-             * IMPORTANT:
-             *
-             * This is the title size for EVERY card.
-             *
-             * Featured and normal cards intentionally
-             * use the exact same title styling.
-             */
+            /* =====================================================
+               MODEL TITLE
 
-            --title-size: 1.5rem;
+               CHANGE THIS VALUE TO CHANGE ALL MODEL TITLES
+               ===================================================== */
+
+            --title-size: 1rem;
 
             --title-weight: 500;
 
 
-            /*
-             * Navigation
-             */
+            /* Navigation */
 
-            --page-button-size: 60px;
+            --navigation-font-size: 1.15rem;
 
         }
 
@@ -129,7 +103,6 @@
             padding: 0;
 
             box-sizing: border-box;
-
 
             user-select: none;
 
@@ -217,13 +190,13 @@
 
             grid-template-columns:
                 repeat(
-                    4,
+                    var(--columns),
                     minmax(0, 1fr)
                 );
 
             grid-template-rows:
                 repeat(
-                    3,
+                    var(--rows),
                     minmax(0, 1fr)
                 );
 
@@ -231,8 +204,6 @@
                 var(--spacing);
 
             overflow: hidden;
-
-            grid-auto-flow: row;
 
         }
 
@@ -273,6 +244,23 @@
         }
 
 
+        .card:hover {
+
+            border-color:
+                rgba(
+                    153,
+                    153,
+                    204,
+                    0.7
+                );
+
+            box-shadow:
+                0 6px 20px
+                rgba(0, 0, 0, 0.25);
+
+        }
+
+
         .card:active {
 
             transform:
@@ -284,15 +272,6 @@
         /* =========================================================
            FEATURED CARD
            ========================================================= */
-
-        /*
-         * The featured card occupies exactly:
-         *
-         * 2 columns
-         * 2 rows
-         *
-         * It is therefore a true 2x2 card.
-         */
 
         .card.featured {
 
@@ -328,19 +307,8 @@
 
 
         /* =========================================================
-           CARD TITLE
+           CARD TITLE — TOP
            ========================================================= */
-
-        /*
-         * IMPORTANT:
-         *
-         * There is ONLY ONE title style.
-         *
-         * The featured card does NOT override it.
-         *
-         * This guarantees that titles are always identical
-         * regardless of card size.
-         */
 
 		.card-title {
 
@@ -348,13 +316,13 @@
 
 			left: 0;
 			right: 0;
-			top: 0;
+			bottom: 0;
 
-			padding: 14px 16px 30px 16px;
+			padding: 30px 16px 14px 16px;
 
 			background:
 				linear-gradient(
-					to bottom,
+					to top,
 					rgba(0, 28, 38, 0.95),
 					rgba(0, 28, 38, 0.65),
 					rgba(0, 28, 38, 0)
@@ -385,32 +353,13 @@
 		}
 
 
-        /*
-         * INTENTIONALLY NO:
-         *
-         * .card.featured .card-title
-         *
-         * override.
-         *
-         * This means the featured title is exactly the same
-         * size as every other title.
-         */
-
-
         /* =========================================================
-           PAGE NAVIGATION
+           NAVIGATION TILE
            ========================================================= */
 
-        #page-navigation {
+        .navigation-card {
 
-            position: absolute;
-
-            left: 50%;
-
-            bottom: 20px;
-
-            transform:
-                translateX(-50%);
+            position: relative;
 
             display: flex;
 
@@ -418,35 +367,20 @@
 
             justify-content: center;
 
-            gap: 15px;
+            border-radius:
+                var(--border-radius);
 
-            z-index: 5;
-
-        }
-
-
-        /* =========================================================
-           NAVIGATION BUTTONS
-           ========================================================= */
-
-        #previous-page,
-        #next-page {
-
-            width:
-                var(--page-button-size);
-
-            height:
-                var(--page-button-size);
+            background:
+                rgba(
+                    153,
+                    153,
+                    204,
+                    0.12
+                );
 
             border:
                 2px solid
                 var(--accent-purple);
-
-            border-radius:
-                50%;
-
-            background:
-                var(--bg-color);
 
             color:
                 var(--accent-purple);
@@ -457,29 +391,16 @@
                 sans-serif;
 
             font-size:
-                1.8rem;
+                var(--navigation-font-size);
 
             font-weight:
-                500;
+                600;
 
             cursor:
                 pointer;
 
-            display:
-                flex;
-
-            align-items:
-                center;
-
-            justify-content:
-                center;
-
             touch-action:
                 manipulation;
-
-            box-shadow:
-                0 4px 15px
-                rgba(0, 0, 0, 0.35);
 
             transition:
                 background 150ms ease,
@@ -489,8 +410,7 @@
         }
 
 
-        #previous-page:hover,
-        #next-page:hover {
+        .navigation-card:hover {
 
             background:
                 var(--accent-purple);
@@ -501,77 +421,78 @@
         }
 
 
-        #previous-page:active,
-        #next-page:active {
+        .navigation-card:active {
 
             transform:
-                scale(0.92);
-
-        }
-
-
-        #previous-page:disabled,
-        #next-page:disabled {
-
-            opacity:
-                0.25;
-
-            cursor:
-                default;
-
-        }
-
-
-        #previous-page:disabled:hover,
-        #next-page:disabled:hover {
-
-            background:
-                var(--bg-color);
-
-            color:
-                var(--accent-purple);
+                scale(0.97);
 
         }
 
 
         /* =========================================================
-           PAGE INDICATOR
+           NEXT BUTTON
            ========================================================= */
 
-        #page-indicator {
+        .navigation-card.next {
 
-            min-width:
-                80px;
-
-            padding:
-                10px 15px;
-
-            border-radius:
-                20px;
-
-            background:
-                rgba(255, 255, 255, 0.08);
-
-            border:
-                1px solid
-                rgba(255, 255, 255, 0.12);
+            border-color:
+                var(--accent-green);
 
             color:
-                var(--text-color);
+                var(--accent-green);
 
-            font-family:
-                'Inter',
-                Arial,
-                sans-serif;
+            background:
+                rgba(
+                    153,
+                    204,
+                    153,
+                    0.10
+                );
 
-            font-size:
-                0.95rem;
+        }
 
-            font-weight:
-                500;
 
-            text-align:
-                center;
+        .navigation-card.next:hover {
+
+            background:
+                var(--accent-green);
+
+            color:
+                var(--bg-color);
+
+        }
+
+
+        /* =========================================================
+           BACK BUTTON
+           ========================================================= */
+
+        .navigation-card.back {
+
+            border-color:
+                var(--accent-purple);
+
+            color:
+                var(--accent-purple);
+
+            background:
+                rgba(
+                    153,
+                    153,
+                    204,
+                    0.10
+                );
+
+        }
+
+
+        .navigation-card.back:hover {
+
+            background:
+                var(--accent-purple);
+
+            color:
+                var(--bg-color);
 
         }
 
@@ -610,7 +531,7 @@
 
 
         /* =========================================================
-           BACK BUTTON
+           BACK BUTTON IN VIEWER
            ========================================================= */
 
         #back {
@@ -658,10 +579,6 @@
 
             touch-action:
                 manipulation;
-
-            transition:
-                transform 150ms ease,
-                background 150ms ease;
 
         }
 
@@ -744,27 +661,8 @@
 
                 --page-padding: 10px;
 
-                --title-size: 1rem;
-
-            }
-
-
-            #page-navigation {
-
-                bottom:
-                    10px;
-
-            }
-
-
-            #previous-page,
-            #next-page {
-
-                width:
-                    50px;
-
-                height:
-                    50px;
+                --navigation-font-size:
+                    0.95rem;
 
             }
 
@@ -785,37 +683,6 @@
     <div id="gallery-page">
 
         <div id="gallery"></div>
-
-
-        <!-- =====================================================
-             PAGE NAVIGATION
-             ===================================================== -->
-
-        <div id="page-navigation">
-
-            <button
-                id="previous-page"
-                type="button"
-                aria-label="Previous page"
-            >
-                ←
-            </button>
-
-
-            <div id="page-indicator">
-                1 / 1
-            </div>
-
-
-            <button
-                id="next-page"
-                type="button"
-                aria-label="Next page"
-            >
-                →
-            </button>
-
-        </div>
 
     </div>
 
@@ -872,8 +739,13 @@
             '377b3b9e288d4265b5de8d95f897a5eb',
             '90318595f90541af8ffb6b5edb855c77',
             '14651059da2b4c1db1ca296920a3062a',
-
             '14c2c0388b4547df9c68afe943417cf6',
+            '36df73258ec14448b67ba1859051c55c',
+            '457e199b78d6486585075aa9647f984f',
+            '44f769f570fd462db821a6ce6c96ba7a',
+            'e24c52fb47db43b286ac92153e771c2c',
+            '9b26c1d0988944b8aa995efce447c00b',
+            '2a4a2c6702494bb6a220576773ca5f94',
             '36df73258ec14448b67ba1859051c55c',
             '457e199b78d6486585075aa9647f984f',
             '44f769f570fd462db821a6ce6c96ba7a',
@@ -888,9 +760,38 @@
            PAGINATION
            ========================================================= */
 
-        const FIRST_PAGE_SIZE = 9;
+        /*
+         * PAGE 1
+         *
+         * 9 models are allocated to page 1.
+         *
+         * Model 1 = 2x2 featured card
+         * Models 2-8 = normal cards
+         *
+         * The final grid position is reserved for NEXT
+         * only if another page exists.
+         */
 
-        const NORMAL_PAGE_SIZE = 12;
+        const FIRST_PAGE_MODELS = 9;
+
+
+        /*
+         * PAGES 2+
+         *
+         * Each page contains up to 12 model slots.
+         *
+         * On pages with navigation:
+         *
+         * bottom-left = BACK
+         * bottom-right = NEXT
+         *
+         * Those navigation tiles therefore replace model slots.
+         *
+         * The model count is handled separately so models are
+         * never accidentally lost.
+         */
+
+        const NORMAL_PAGE_MODELS = 12;
 
 
         let currentPage = 0;
@@ -901,88 +802,86 @@
 
 
         /* =========================================================
-           PLACEHOLDER
+           PLACEHOLDER IMAGE
            ========================================================= */
 
         const placeholderImage =
             'data:image/svg+xml;utf8,' +
             '<svg xmlns="http://www.w3.org/2000/svg" ' +
-            'width="1920" height="1080" viewBox="0 0 1920 1080">' +
-            '<rect width="1920" height="1080" fill="%23163840"/>' +
+            'width="1920" height="1080" ' +
+            'viewBox="0 0 1920 1080">' +
+            '<rect width="1920" height="1080" ' +
+            'fill="%23163840"/>' +
             '</svg>';
 
 
         /* =========================================================
-           PAGE SIZE
+           CALCULATE TOTAL PAGES
            ========================================================= */
 
-        function getPageSize(page) {
+        function calculateTotalPages() {
 
-            return page === 0
-                ? FIRST_PAGE_SIZE
-                : NORMAL_PAGE_SIZE;
+            if (
+                allModels.length <=
+                FIRST_PAGE_MODELS
+            ) {
 
-        }
-
-
-        /* =========================================================
-           PAGE START
-           ========================================================= */
-
-        function getPageStart(page) {
-
-            if (page === 0) {
-
-                return 0;
+                return 1;
 
             }
 
 
             return (
-                FIRST_PAGE_SIZE +
-                (page - 1) *
-                NORMAL_PAGE_SIZE
+                1 +
+                Math.ceil(
+                    (
+                        allModels.length -
+                        FIRST_PAGE_MODELS
+                    ) /
+                    NORMAL_PAGE_MODELS
+                )
             );
 
         }
 
 
         /* =========================================================
-           TOTAL PAGES
+           GET PAGE MODELS
            ========================================================= */
 
-        function calculateTotalPages() {
+        function getPageModels(page) {
+
+            /*
+             * PAGE 1
+             */
 
             if (
-                allModels.length === 0
+                page === 0
             ) {
 
-                return 1;
+                return allModels.slice(
+                    0,
+                    FIRST_PAGE_MODELS
+                );
 
             }
 
 
-            if (
-                allModels.length <=
-                FIRST_PAGE_SIZE
-            ) {
+            /*
+             * PAGES 2+
+             */
 
-                return 1;
-
-            }
-
-
-            const remaining =
-                allModels.length -
-                FIRST_PAGE_SIZE;
+            const start =
+                FIRST_PAGE_MODELS +
+                (
+                    page - 1
+                ) *
+                NORMAL_PAGE_MODELS;
 
 
-            return (
-                1 +
-                Math.ceil(
-                    remaining /
-                    NORMAL_PAGE_SIZE
-                )
+            return allModels.slice(
+                start,
+                start + NORMAL_PAGE_MODELS
             );
 
         }
@@ -1009,7 +908,9 @@
                         );
 
 
-                    if (!response.ok) {
+                    if (
+                        !response.ok
+                    ) {
 
                         throw new Error(
                             `HTTP ${response.status}`
@@ -1071,10 +972,154 @@
 
 
         /* =========================================================
-           RENDER PAGE
+           CREATE MODEL CARD
            ========================================================= */
 
-        function renderPage() {
+        function createModelCard(model) {
+
+            const card =
+                document.createElement(
+                    'div'
+                );
+
+
+            card.className =
+                'card';
+
+
+            const image =
+                document.createElement(
+                    'img'
+                );
+
+
+            image.src =
+                model.thumbnail ||
+                placeholderImage;
+
+
+            image.alt =
+                model.title;
+
+
+            image.draggable =
+                false;
+
+
+            const title =
+                document.createElement(
+                    'div'
+                );
+
+
+            title.className =
+                'card-title';
+
+
+            title.textContent =
+                model.title;
+
+
+            card.appendChild(
+                image
+            );
+
+
+            card.appendChild(
+                title
+            );
+
+
+            card.addEventListener(
+                'click',
+                () => {
+
+                    openModel(
+                        model.uid,
+                        model.title
+                    );
+
+                }
+            );
+
+
+            return card;
+
+        }
+
+
+        /* =========================================================
+           CREATE NAVIGATION CARD
+           ========================================================= */
+
+        function createNavigationCard(
+            type
+        ) {
+
+            const card =
+                document.createElement(
+                    'div'
+                );
+
+
+            card.className =
+                'navigation-card';
+
+
+            if (
+                type === 'next'
+            ) {
+
+                card.classList.add(
+                    'next'
+                );
+
+
+                card.innerHTML =
+                    'Next&nbsp;&nbsp;→';
+
+
+                card.addEventListener(
+                    'click',
+                    nextPage
+                );
+
+            }
+
+
+            if (
+                type === 'back'
+            ) {
+
+                card.classList.add(
+                    'back'
+                );
+
+
+                card.innerHTML =
+                    '←&nbsp;&nbsp;Back';
+
+
+                card.addEventListener(
+                    'click',
+                    previousPage
+                );
+
+            }
+
+
+            return card;
+
+        }
+
+
+        /* =========================================================
+           RENDER PAGE 1
+           ========================================================= */
+
+        function renderFirstPage(
+            pageModels
+        ) {
 
             const gallery =
                 document.getElementById(
@@ -1082,119 +1127,275 @@
                 );
 
 
-            gallery.innerHTML = '';
+            /*
+             * -----------------------------------------------------
+             * FEATURED MODEL
+             * -----------------------------------------------------
+             */
+
+            if (
+                pageModels.length > 0
+            ) {
+
+                const featured =
+                    createModelCard(
+                        pageModels[0]
+                    );
 
 
-            const start =
-                getPageStart(
-                    currentPage
+                featured.classList.add(
+                    'featured'
                 );
 
 
-            const pageSize =
-                getPageSize(
-                    currentPage
+                gallery.appendChild(
+                    featured
+                );
+
+            }
+
+
+            /*
+             * -----------------------------------------------------
+             * NORMAL MODELS
+             *
+             * Models 2-8 occupy the remaining 7 normal
+             * positions around the featured card.
+             * -----------------------------------------------------
+             */
+
+            for (
+                let i = 1;
+                i < pageModels.length;
+                i++
+            ) {
+
+                /*
+                 * If this is the last grid position AND
+                 * there is another page, use it for NEXT.
+                 *
+                 * However, because the featured card occupies
+                 * four cells, CSS Grid automatically places
+                 * subsequent cards into the available cells.
+                 */
+
+                if (
+                    i === pageModels.length - 1 &&
+                    totalPages > 1
+                ) {
+
+                    gallery.appendChild(
+                        createNavigationCard(
+                            'next'
+                        )
+                    );
+
+                    continue;
+
+                }
+
+
+                gallery.appendChild(
+                    createModelCard(
+                        pageModels[i]
+                    )
+                );
+
+            }
+
+
+            /*
+             * If this is the last page, the last model remains
+             * a normal model.
+             *
+             * If there is a next page, we need to ensure the
+             * navigation tile occupies the bottom-right grid
+             * position.
+             */
+
+            if (
+                totalPages > 1
+            ) {
+
+                /*
+                 * The featured card uses 4 cells.
+                 *
+                 * There are 8 remaining cells.
+                 *
+                 * We want:
+                 *
+                 * 7 model cards
+                 * 1 Next card
+                 */
+
+            }
+
+        }
+
+
+        /* =========================================================
+           RENDER NORMAL PAGE
+           ========================================================= */
+
+        function renderNormalPage(
+            pageModels
+        ) {
+
+            const gallery =
+                document.getElementById(
+                    'gallery'
                 );
 
 
-            const end =
-                Math.min(
-                    start + pageSize,
-                    allModels.length
+            const isLastPage =
+                currentPage ===
+                totalPages - 1;
+
+
+            /*
+             * -----------------------------------------------------
+             * BACK
+             *
+             * Always occupies bottom-left.
+             *
+             * We need to explicitly position this tile.
+             * -----------------------------------------------------
+             */
+
+            const backCard =
+                createNavigationCard(
+                    'back'
                 );
 
 
-            const pageModels =
-                allModels.slice(
-                    start,
-                    end
-                );
+            backCard.style.gridColumn =
+                '1';
+
+
+            backCard.style.gridRow =
+                '3';
+
+
+            gallery.appendChild(
+                backCard
+            );
+
+
+            /*
+             * -----------------------------------------------------
+             * MODELS
+             *
+             * We place models into all available cells except:
+             *
+             * bottom-left = Back
+             *
+             * bottom-right = Next, if another page exists
+             * -----------------------------------------------------
+             */
+
+
+            const modelPositions = [
+
+                {
+                    column: 1,
+                    row: 1
+                },
+
+                {
+                    column: 2,
+                    row: 1
+                },
+
+                {
+                    column: 3,
+                    row: 1
+                },
+
+                {
+                    column: 4,
+                    row: 1
+                },
+
+                {
+                    column: 1,
+                    row: 2
+                },
+
+                {
+                    column: 2,
+                    row: 2
+                },
+
+                {
+                    column: 3,
+                    row: 2
+                },
+
+                {
+                    column: 4,
+                    row: 2
+                },
+
+                {
+                    column: 2,
+                    row: 3
+                },
+
+                {
+                    column: 3,
+                    row: 3
+                }
+
+            ];
+
+
+            /*
+             * If this is the LAST page, bottom-right is
+             * available for a model too.
+             */
+
+            if (
+                isLastPage
+            ) {
+
+                modelPositions.push({
+
+                    column: 4,
+                    row: 3
+
+                });
+
+            }
 
 
             pageModels.forEach(
                 (model, index) => {
 
-                    const card =
-                        document.createElement(
-                            'div'
-                        );
-
-
-                    card.className =
-                        'card';
-
-
-                    /*
-                     * ONLY the first card on page 1
-                     * gets the 2x2 layout.
-                     */
-
                     if (
-                        currentPage === 0 &&
-                        index === 0
+                        !modelPositions[index]
                     ) {
 
-                        card.classList.add(
-                            'featured'
-                        );
+                        return;
 
                     }
 
 
-                    const image =
-                        document.createElement(
-                            'img'
+                    const position =
+                        modelPositions[index];
+
+
+                    const card =
+                        createModelCard(
+                            model
                         );
 
 
-                    image.src =
-                        model.thumbnail ||
-                        placeholderImage;
+                    card.style.gridColumn =
+                        position.column;
 
 
-                    image.alt =
-                        model.title;
-
-
-                    image.draggable =
-                        false;
-
-
-                    const title =
-                        document.createElement(
-                            'div'
-                        );
-
-
-                    title.className =
-                        'card-title';
-
-
-                    title.textContent =
-                        model.title;
-
-
-                    card.appendChild(
-                        image
-                    );
-
-
-                    card.appendChild(
-                        title
-                    );
-
-
-                    card.addEventListener(
-                        'click',
-                        () => {
-
-                            openModel(
-                                model.uid,
-                                model.title
-                            );
-
-                        }
-                    );
+                    card.style.gridRow =
+                        position.row;
 
 
                     gallery.appendChild(
@@ -1205,82 +1406,98 @@
             );
 
 
-            updatePagination();
+            /*
+             * -----------------------------------------------------
+             * NEXT
+             *
+             * Only appears if another page exists.
+             *
+             * It always occupies bottom-right.
+             * -----------------------------------------------------
+             */
+
+            if (
+                !isLastPage
+            ) {
+
+                const nextCard =
+                    createNavigationCard(
+                        'next'
+                    );
+
+
+                nextCard.style.gridColumn =
+                    '4';
+
+
+                nextCard.style.gridRow =
+                    '3';
+
+
+                gallery.appendChild(
+                    nextCard
+                );
+
+            }
 
         }
 
 
         /* =========================================================
-           PAGINATION UI
+           RENDER CURRENT PAGE
            ========================================================= */
 
-        function updatePagination() {
+        function renderPage() {
 
-            const indicator =
+            const gallery =
                 document.getElementById(
-                    'page-indicator'
+                    'gallery'
                 );
 
 
-            const previous =
-                document.getElementById(
-                    'previous-page'
+            /*
+             * Clear the old page.
+             */
+
+            gallery.innerHTML = '';
+
+
+            /*
+             * Get models for this page.
+             */
+
+            const pageModels =
+                getPageModels(
+                    currentPage
                 );
 
 
-            const next =
-                document.getElementById(
-                    'next-page'
-                );
-
-
-            totalPages =
-                calculateTotalPages();
-
+            /*
+             * PAGE 1
+             */
 
             if (
-                currentPage >=
-                totalPages
+                currentPage === 0
             ) {
 
-                currentPage =
-                    totalPages - 1;
+                renderFirstPage(
+                    pageModels
+                );
 
             }
 
 
-            if (
-                currentPage < 0
-            ) {
+            /*
+             * PAGE 2+
+             */
 
-                currentPage = 0;
+            else {
 
-            }
-
-
-            indicator.textContent =
-                `${currentPage + 1} / ${totalPages}`;
-
-
-            previous.disabled =
-                currentPage === 0;
-
-
-            next.disabled =
-                currentPage >=
-                totalPages - 1;
-
-
-            const navigation =
-                document.getElementById(
-                    'page-navigation'
+                renderNormalPage(
+                    pageModels
                 );
 
-
-            navigation.style.display =
-                totalPages > 1
-                    ? 'flex'
-                    : 'none';
+            }
 
         }
 
@@ -1351,18 +1568,31 @@
 
             const embedUrl =
                 `https://sketchfab.com/models/${uid}/embed` +
+
                 `?autostart=1` +
+
                 `&ui_animations=0` +
+
                 `&ui_infos=0` +
+
                 `&ui_stop=0` +
+
                 `&ui_inspector=0` +
+
                 `&ui_watermark_link=0` +
+
                 `&ui_watermark=0` +
+
                 `&ui_ar=0` +
+
                 `&ui_help=0` +
+
                 `&ui_settings=0` +
+
                 `&ui_vr=0` +
+
                 `&ui_fullscreen=0` +
+
                 `&ui_annotations=0`;
 
 
@@ -1461,21 +1691,27 @@
         document.addEventListener(
             'pointerdown',
             resetIdleTimer,
-            { passive: true }
+            {
+                passive: true
+            }
         );
 
 
         document.addEventListener(
             'pointermove',
             resetIdleTimer,
-            { passive: true }
+            {
+                passive: true
+            }
         );
 
 
         document.addEventListener(
             'touchstart',
             resetIdleTimer,
-            { passive: true }
+            {
+                passive: true
+            }
         );
 
 
@@ -1628,40 +1864,6 @@
 
 
         /* =========================================================
-           BUTTON EVENTS
-           ========================================================= */
-
-        document
-            .getElementById(
-                'next-page'
-            )
-            .addEventListener(
-                'click',
-                nextPage
-            );
-
-
-        document
-            .getElementById(
-                'previous-page'
-            )
-            .addEventListener(
-                'click',
-                previousPage
-            );
-
-
-        document
-            .getElementById(
-                'back'
-            )
-            .addEventListener(
-                'click',
-                closeViewer
-            );
-
-
-        /* =========================================================
            INITIALIZE
            ========================================================= */
 
@@ -1669,19 +1871,39 @@
             'DOMContentLoaded',
             async () => {
 
+                /*
+                 * Fetch all Sketchfab metadata.
+                 */
+
                 allModels =
                     await fetchModelsMetadata();
 
 
-                currentPage = 0;
-
+                /*
+                 * Calculate pages.
+                 */
 
                 totalPages =
                     calculateTotalPages();
 
 
+                /*
+                 * Start on page 1.
+                 */
+
+                currentPage = 0;
+
+
+                /*
+                 * Render.
+                 */
+
                 renderPage();
 
+
+                /*
+                 * Request fullscreen.
+                 */
 
                 requestFullscreen();
 
