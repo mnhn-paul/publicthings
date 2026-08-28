@@ -12,7 +12,6 @@
 
     <title>Sketchfab Museum Kiosk</title>
 
-
     <!-- =========================================================
          GOOGLE FONT — INTER
          ========================================================= -->
@@ -33,7 +32,6 @@
         rel="stylesheet"
     >
 
-
     <style>
 
         /* =========================================================
@@ -51,17 +49,11 @@
             --border-color:
                 rgba(255, 255, 255, 0.12);
 
-
-            /* Accent colours */
-
             --accent-purple: #9999cc;
 
             --accent-red: #FF6666;
 
             --accent-green: #99cc99;
-
-
-            /* Layout */
 
             --border-radius: 12px;
 
@@ -73,19 +65,9 @@
 
             --rows: 3;
 
-
-            /* =====================================================
-               MODEL TITLE
-
-               CHANGE THIS VALUE TO CHANGE ALL MODEL TITLES
-               ===================================================== */
-
             --title-size: 1rem;
 
             --title-weight: 500;
-
-
-            /* Navigation */
 
             --navigation-font-size: 1.15rem;
 
@@ -307,50 +289,54 @@
 
 
         /* =========================================================
-           CARD TITLE — TOP
+           CARD TITLE
            ========================================================= */
 
-		.card-title {
+        .card-title {
 
-			position: absolute;
+            position: absolute;
 
-			left: 0;
-			right: 0;
-			bottom: 0;
+            left: 0;
 
-			padding: 30px 16px 14px 16px;
+            right: 0;
 
-			background:
-				linear-gradient(
-					to top,
-					rgba(0, 28, 38, 0.95),
-					rgba(0, 28, 38, 0.65),
-					rgba(0, 28, 38, 0)
-				);
+            bottom: 0;
 
-			font-family:
-				'Inter',
-				Arial,
-				sans-serif;
+            padding:
+                30px 16px 14px 16px;
 
-			font-size:
-				var(--title-size);
+            background:
+                linear-gradient(
+                    to top,
+                    rgba(0, 28, 38, 0.95),
+                    rgba(0, 28, 38, 0.65),
+                    rgba(0, 28, 38, 0)
+                );
 
-			font-weight:
-				var(--title-weight);
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
 
-			line-height:
-				1.3;
+            font-size:
+                var(--title-size);
 
-			color:
-				#ffffff;
+            font-weight:
+                var(--title-weight);
 
-			text-align:
-				center;
+            line-height:
+                1.3;
 
-			pointer-events:
-				none;
-		}
+            color:
+                #ffffff;
+
+            text-align:
+                center;
+
+            pointer-events:
+                none;
+
+        }
 
 
         /* =========================================================
@@ -366,6 +352,12 @@
             align-items: center;
 
             justify-content: center;
+
+            width: 100%;
+
+            height: 100%;
+
+            padding: 0;
 
             border-radius:
                 var(--border-radius);
@@ -406,6 +398,12 @@
                 background 150ms ease,
                 color 150ms ease,
                 transform 150ms ease;
+
+            appearance:
+                none;
+
+            -webkit-appearance:
+                none;
 
         }
 
@@ -464,7 +462,7 @@
 
 
         /* =========================================================
-           BACK BUTTON
+           BACK BUTTON — GALLERY
            ========================================================= */
 
         .navigation-card.back {
@@ -522,7 +520,7 @@
                 #000;
 
             z-index:
-                10;
+                100;
 
             overflow:
                 hidden;
@@ -531,7 +529,7 @@
 
 
         /* =========================================================
-           BACK BUTTON IN VIEWER
+           BACK BUTTON IN SKETCHFAB VIEWER
            ========================================================= */
 
         #back {
@@ -546,15 +544,24 @@
                 15px;
 
             z-index:
-                20;
+                1000;
+
+            display:
+                block;
 
             padding:
                 12px 18px;
+
+            margin:
+                0;
 
             background:
                 var(--accent-purple);
 
             border:
+                none;
+
+            outline:
                 none;
 
             color:
@@ -580,6 +587,12 @@
             touch-action:
                 manipulation;
 
+            pointer-events:
+                auto;
+
+            -webkit-tap-highlight-color:
+                transparent;
+
         }
 
 
@@ -599,8 +612,16 @@
         }
 
 
+        #back:focus {
+
+            outline:
+                none;
+
+        }
+
+
         /* =========================================================
-           IFRAME
+           IFRAME WRAPPER
            ========================================================= */
 
         #iframe-wrapper {
@@ -620,8 +641,15 @@
             background:
                 #000;
 
+            z-index:
+                100;
+
         }
 
+
+        /* =========================================================
+           IFRAME
+           ========================================================= */
 
         #iframe {
 
@@ -657,9 +685,11 @@
 
             :root {
 
-                --spacing: 10px;
+                --spacing:
+                    10px;
 
-                --page-padding: 10px;
+                --page-padding:
+                    10px;
 
                 --navigation-font-size:
                     0.95rem;
@@ -693,9 +723,17 @@
 
     <div id="viewer">
 
+        <!--
+             IMPORTANT:
+             This button is outside the iframe.
+             It therefore controls the parent page and can
+             close the Sketchfab viewer.
+        -->
+
         <button
             id="back"
             type="button"
+            aria-label="Back to gallery"
         >
             ← Back
         </button>
@@ -760,39 +798,9 @@
            PAGINATION
            ========================================================= */
 
-        /*
-         * PAGE 1
-         *
-         * 9 models are allocated to page 1.
-         *
-         * Model 1 = 2x2 featured card
-         * Models 2-8 = normal cards
-         *
-         * The final grid position is reserved for NEXT
-         * only if another page exists.
-         */
-
         const FIRST_PAGE_MODELS = 9;
 
-
-        /*
-         * PAGES 2+
-         *
-         * Each page contains up to 12 model slots.
-         *
-         * On pages with navigation:
-         *
-         * bottom-left = BACK
-         * bottom-right = NEXT
-         *
-         * Those navigation tiles therefore replace model slots.
-         *
-         * The model count is handled separately so models are
-         * never accidentally lost.
-         */
-
         const NORMAL_PAGE_MODELS = 12;
-
 
         let currentPage = 0;
 
@@ -830,7 +838,6 @@
 
             }
 
-
             return (
                 1 +
                 Math.ceil(
@@ -851,10 +858,6 @@
 
         function getPageModels(page) {
 
-            /*
-             * PAGE 1
-             */
-
             if (
                 page === 0
             ) {
@@ -866,18 +869,12 @@
 
             }
 
-
-            /*
-             * PAGES 2+
-             */
-
             const start =
                 FIRST_PAGE_MODELS +
                 (
                     page - 1
                 ) *
                 NORMAL_PAGE_MODELS;
-
 
             return allModels.slice(
                 start,
@@ -895,7 +892,6 @@
 
             const models = [];
 
-
             for (
                 const modelId of MODEL_IDS
             ) {
@@ -907,7 +903,6 @@
                             `https://api.sketchfab.com/v3/models/${modelId}`
                         );
 
-
                     if (
                         !response.ok
                     ) {
@@ -918,10 +913,8 @@
 
                     }
 
-
                     const data =
                         await response.json();
-
 
                     models.push({
 
@@ -939,14 +932,12 @@
 
                     });
 
-
                 } catch (error) {
 
                     console.error(
                         `Failed to fetch model ${modelId}:`,
                         error
                     );
-
 
                     models.push({
 
@@ -965,7 +956,6 @@
 
             }
 
-
             return models;
 
         }
@@ -982,53 +972,42 @@
                     'div'
                 );
 
-
             card.className =
                 'card';
-
 
             const image =
                 document.createElement(
                     'img'
                 );
 
-
             image.src =
                 model.thumbnail ||
                 placeholderImage;
 
-
             image.alt =
                 model.title;
 
-
             image.draggable =
                 false;
-
 
             const title =
                 document.createElement(
                     'div'
                 );
 
-
             title.className =
                 'card-title';
 
-
             title.textContent =
                 model.title;
-
 
             card.appendChild(
                 image
             );
 
-
             card.appendChild(
                 title
             );
-
 
             card.addEventListener(
                 'click',
@@ -1041,7 +1020,6 @@
 
                 }
             );
-
 
             return card;
 
@@ -1058,13 +1036,14 @@
 
             const card =
                 document.createElement(
-                    'div'
+                    'button'
                 );
 
+            card.type =
+                'button';
 
             card.className =
                 'navigation-card';
-
 
             if (
                 type === 'next'
@@ -1074,10 +1053,8 @@
                     'next'
                 );
 
-
                 card.innerHTML =
                     'Next&nbsp;&nbsp;→';
-
 
                 card.addEventListener(
                     'click',
@@ -1085,7 +1062,6 @@
                 );
 
             }
-
 
             if (
                 type === 'back'
@@ -1095,10 +1071,8 @@
                     'back'
                 );
 
-
                 card.innerHTML =
                     '←&nbsp;&nbsp;Back';
-
 
                 card.addEventListener(
                     'click',
@@ -1106,7 +1080,6 @@
                 );
 
             }
-
 
             return card;
 
@@ -1126,13 +1099,6 @@
                     'gallery'
                 );
 
-
-            /*
-             * -----------------------------------------------------
-             * FEATURED MODEL
-             * -----------------------------------------------------
-             */
-
             if (
                 pageModels.length > 0
             ) {
@@ -1142,11 +1108,9 @@
                         pageModels[0]
                     );
 
-
                 featured.classList.add(
                     'featured'
                 );
-
 
                 gallery.appendChild(
                     featured
@@ -1154,30 +1118,11 @@
 
             }
 
-
-            /*
-             * -----------------------------------------------------
-             * NORMAL MODELS
-             *
-             * Models 2-8 occupy the remaining 7 normal
-             * positions around the featured card.
-             * -----------------------------------------------------
-             */
-
             for (
                 let i = 1;
                 i < pageModels.length;
                 i++
             ) {
-
-                /*
-                 * If this is the last grid position AND
-                 * there is another page, use it for NEXT.
-                 *
-                 * However, because the featured card occupies
-                 * four cells, CSS Grid automatically places
-                 * subsequent cards into the available cells.
-                 */
 
                 if (
                     i === pageModels.length - 1 &&
@@ -1194,39 +1139,11 @@
 
                 }
 
-
                 gallery.appendChild(
                     createModelCard(
                         pageModels[i]
                     )
                 );
-
-            }
-
-
-            /*
-             * If this is the last page, the last model remains
-             * a normal model.
-             *
-             * If there is a next page, we need to ensure the
-             * navigation tile occupies the bottom-right grid
-             * position.
-             */
-
-            if (
-                totalPages > 1
-            ) {
-
-                /*
-                 * The featured card uses 4 cells.
-                 *
-                 * There are 8 remaining cells.
-                 *
-                 * We want:
-                 *
-                 * 7 model cards
-                 * 1 Next card
-                 */
 
             }
 
@@ -1246,52 +1163,24 @@
                     'gallery'
                 );
 
-
             const isLastPage =
                 currentPage ===
                 totalPages - 1;
-
-
-            /*
-             * -----------------------------------------------------
-             * BACK
-             *
-             * Always occupies bottom-left.
-             *
-             * We need to explicitly position this tile.
-             * -----------------------------------------------------
-             */
 
             const backCard =
                 createNavigationCard(
                     'back'
                 );
 
-
             backCard.style.gridColumn =
                 '1';
-
 
             backCard.style.gridRow =
                 '3';
 
-
             gallery.appendChild(
                 backCard
             );
-
-
-            /*
-             * -----------------------------------------------------
-             * MODELS
-             *
-             * We place models into all available cells except:
-             *
-             * bottom-left = Back
-             *
-             * bottom-right = Next, if another page exists
-             * -----------------------------------------------------
-             */
 
 
             const modelPositions = [
@@ -1349,11 +1238,6 @@
             ];
 
 
-            /*
-             * If this is the LAST page, bottom-right is
-             * available for a model too.
-             */
-
             if (
                 isLastPage
             ) {
@@ -1379,24 +1263,19 @@
 
                     }
 
-
                     const position =
                         modelPositions[index];
-
 
                     const card =
                         createModelCard(
                             model
                         );
 
-
                     card.style.gridColumn =
                         position.column;
 
-
                     card.style.gridRow =
                         position.row;
-
 
                     gallery.appendChild(
                         card
@@ -1405,16 +1284,6 @@
                 }
             );
 
-
-            /*
-             * -----------------------------------------------------
-             * NEXT
-             *
-             * Only appears if another page exists.
-             *
-             * It always occupies bottom-right.
-             * -----------------------------------------------------
-             */
 
             if (
                 !isLastPage
@@ -1425,14 +1294,11 @@
                         'next'
                     );
 
-
                 nextCard.style.gridColumn =
                     '4';
 
-
                 nextCard.style.gridRow =
                     '3';
-
 
                 gallery.appendChild(
                     nextCard
@@ -1454,27 +1320,13 @@
                     'gallery'
                 );
 
-
-            /*
-             * Clear the old page.
-             */
-
-            gallery.innerHTML = '';
-
-
-            /*
-             * Get models for this page.
-             */
+            gallery.innerHTML =
+                '';
 
             const pageModels =
                 getPageModels(
                     currentPage
                 );
-
-
-            /*
-             * PAGE 1
-             */
 
             if (
                 currentPage === 0
@@ -1484,14 +1336,7 @@
                     pageModels
                 );
 
-            }
-
-
-            /*
-             * PAGE 2+
-             */
-
-            else {
+            } else {
 
                 renderNormalPage(
                     pageModels
@@ -1559,12 +1404,10 @@
                     'viewer'
                 );
 
-
             const iframe =
                 document.getElementById(
                     'iframe'
                 );
-
 
             const embedUrl =
                 `https://sketchfab.com/models/${uid}/embed` +
@@ -1596,13 +1439,25 @@
                 `&ui_annotations=0`;
 
 
+            /*
+             * Set the iframe source first.
+             */
+
             iframe.src =
                 embedUrl;
 
 
+            /*
+             * Show the viewer.
+             */
+
             viewer.style.display =
                 'block';
 
+
+            /*
+             * Start the idle timer.
+             */
 
             resetIdleTimer();
 
@@ -1620,19 +1475,34 @@
                     'viewer'
                 );
 
-
             const iframe =
                 document.getElementById(
                     'iframe'
                 );
 
 
-            iframe.src = '';
+            /*
+             * Stop the Sketchfab iframe completely.
+             *
+             * This is important because simply hiding the iframe
+             * can leave the 3D viewer running in the background.
+             */
 
+            iframe.src =
+                '';
+
+
+            /*
+             * Hide the viewer.
+             */
 
             viewer.style.display =
                 'none';
 
+
+            /*
+             * Stop the idle timer.
+             */
 
             clearTimeout(
                 idleTimer
@@ -1642,11 +1512,62 @@
 
 
         /* =========================================================
+           VIEWER BACK BUTTON
+           ========================================================= */
+
+        function setupViewerBackButton() {
+
+            const backButton =
+                document.getElementById(
+                    'back'
+                );
+
+
+            /*
+             * Normal mouse / click support.
+             */
+
+            backButton.addEventListener(
+                'click',
+                function(event) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                    closeViewer();
+
+                }
+            );
+
+
+            /*
+             * Extra pointer support for touchscreen kiosks.
+             *
+             * This makes the button respond reliably to touch
+             * screens as well as a mouse.
+             */
+
+            backButton.addEventListener(
+                'pointerup',
+                function(event) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                }
+            );
+
+        }
+
+
+        /* =========================================================
            IDLE TIMER
            ========================================================= */
 
-        let idleTimer = null;
-
+        let idleTimer =
+            null;
 
         const IDLE_TIME =
             90000;
@@ -1658,12 +1579,10 @@
                 idleTimer
             );
 
-
             const viewer =
                 document.getElementById(
                     'viewer'
                 );
-
 
             if (
                 viewer.style.display !==
@@ -1673,7 +1592,6 @@
                 return;
 
             }
-
 
             idleTimer =
                 setTimeout(
@@ -1690,7 +1608,24 @@
 
         document.addEventListener(
             'pointerdown',
-            resetIdleTimer,
+            function(event) {
+
+                /*
+                 * Do not interfere with the viewer Back button.
+                 */
+
+                if (
+                    event.target.id ===
+                    'back'
+                ) {
+
+                    return;
+
+                }
+
+                resetIdleTimer();
+
+            },
             {
                 passive: true
             }
@@ -1782,6 +1717,10 @@
                 }
 
 
+                /* =================================================
+                   ESCAPE — CLOSE VIEWER
+                   ================================================= */
+
                 if (
                     event.key === 'Escape'
                 ) {
@@ -1791,7 +1730,6 @@
                             'viewer'
                         );
 
-
                     if (
                         viewer.style.display ===
                         'block'
@@ -1799,7 +1737,7 @@
 
                         event.preventDefault();
 
-                        resetIdleTimer();
+                        closeViewer();
 
                     }
 
@@ -1818,7 +1756,6 @@
             const elem =
                 document.documentElement;
 
-
             if (
                 document.fullscreenElement
             ) {
@@ -1826,7 +1763,6 @@
                 return;
 
             }
-
 
             if (
                 elem.requestFullscreen
@@ -1844,13 +1780,11 @@
                         }
                     );
 
-
             } else if (
                 elem.webkitRequestFullscreen
             ) {
 
                 elem.webkitRequestFullscreen();
-
 
             } else if (
                 elem.msRequestFullscreen
@@ -1872,6 +1806,16 @@
             async () => {
 
                 /*
+                 * IMPORTANT:
+                 *
+                 * Connect the Back button to closeViewer()
+                 * before the user can open a model.
+                 */
+
+                setupViewerBackButton();
+
+
+                /*
                  * Fetch all Sketchfab metadata.
                  */
 
@@ -1891,11 +1835,12 @@
                  * Start on page 1.
                  */
 
-                currentPage = 0;
+                currentPage =
+                    0;
 
 
                 /*
-                 * Render.
+                 * Render gallery.
                  */
 
                 renderPage();
