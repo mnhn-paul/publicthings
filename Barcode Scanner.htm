@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Scanner</title>
+    <!--link to font-->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="css/leaflet.css">
+    <script src="js/leaflet.js"></script>
+
+    <style>
+        /*apply margin: 0 to every element*/
+        * {
+            margin: 0;
+            font-family: "Inter", sans-serif;
+        }
+
+        /*Fixed page*/
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /*Header*/
+        #header {
+            background-color: #689B71;
+        }
+
+        /*Header-Logo*/
+        .mnhnlLogo {
+            height: 150px;
+        }
+
+        /*Main*/
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #scannerPage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        label {
+            margin-bottom: 50px;
+            font-size: 100px;
+            stroke-width: 0%;
+            font-weight: 500;
+        }
+
+        input {
+            text-align: center;
+            font-size: 50px;
+        }
+
+        #barcodeScannerInput {
+            height: 100px;
+            width: 1000px;
+        }
+
+        #barcodeScannerInput.hiddenScanner {
+            position: fixed;
+            /*shorthand for setting top, right, bottom, and left all to 0*/
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+
+            opacity: 0;
+            /*very top element*/
+            z-index: 9999;
+
+            pointer-events: none;
+
+            /* Remove its visual appearance */
+            border: none;
+            outline: none;
+            background: transparent;
+            color: transparent;
+            caret-color: transparent;
+        }
+
+        #errorMessage {
+            display: none;
+            margin-bottom: 50px;
+            font-size: 50px;
+        }
+
+        #output {
+            display: none;
+            width: 100%;
+            height: 100%;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr;
+            gap: 30px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #output>div {
+            background-color: white;
+            border: 2px solid black;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+
+            height: 100%;
+            box-sizing: border-box;
+
+            min-width: 0;
+            min-height: 0;
+        }
+
+
+        #specimenInfo {
+            font-size: 40px;
+        }
+
+        #specimenInfo h2 {
+            font-size: 40px;
+        }
+
+        #specimenInfo p {
+            margin-top: 40px;
+            white-space: normal;
+        }
+
+        #specimenInfo button {
+            margin-top: 50px;
+            font-size: 25px;
+        }
+
+        #imageContainer {
+            padding: 0 !important;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .specimenImage {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            border-radius: 15px;
+        }
+
+        #noImageMessage {
+            font-size: 50px;
+        }
+
+        #map {
+            width: auto;
+            height: auto;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <header id="header"><img class="mnhnlLogo" src="images/MNHNL_Logo.png"></header>
+    <main id="main">
+
+        <!-- Scanner page -->
+        <div id="scannerPage">
+            <label for="barcodeScannerInput">Scan a specimen</label>
+            <h1 id="errorMessage">Specimen not found !</h1>
+
+        </div>
+
+        <!-- Barcode Scanner Input -->
+        <div id="barCodeContainer">
+            <input id="barcodeScannerInput" type="text" placeholder="▌▌▌▌" autofocus>
+        </div>
+
+        <!-- Result page -->
+        <div id="output">
+            <div id="specimenInfo"></div>
+            <div id="imageContainer"></div>
+            <div id="map"></div>
+        </div>
+    </main>
+</body>
+<script>
+    // global vars
+    // Get auto setting from URL (true or false)
+    const urlParams = new URLSearchParams(window.location.search);
+    const auto = urlParams.get("auto") === "true";
+
+    const leaflet = L.map("map");
+
+    L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+            attribution: "&copy; OpenStreetMap contributors",
+            maxZoom: 16,
+            minZoom: 10
+        }
+    ).addTo(leaflet);
+
+    let marker;
+
+    // global var for timer
+    let backTimer;
+
+    //put focus on barcodeInput as page loads
+    const barcodeInput = document.getElementById("barcodeScannerInput");
+
+    //Keep focus on barcodeInput
+    //listen for event blur and then activate function - waits 0s to put focus back on barcodeInput
+    barcodeInput.addEventListener("blur", function () {
+        setTimeout(() => {
+            this.focus();
+        }, 0);
+    });
+
+
+    //goBack function - hides specimen page and shows scanner page
+    function goBack() {
+        //Stop the timer
+        clearTimeout(backTimer);
+
+        //Hide specimen information
+        document.getElementById("output").style.display = "none";
+
+        //Show scanner page again
+        document.getElementById("scannerPage").style.display = "flex";
+
+        //Show header again
+        document.getElementById("header").style.display = "block";
+
+        //Clear barcode input
+        document.getElementById("barcodeScannerInput").value = "";
+
+        barcodeInput.classList.remove("hiddenScanner");
+    }
+
+
+    //getData - API call + displaying info
+    //start of getData function
+    async function getData() {
+        //get inputValue from barcodeScanner
+        const barcode = document.getElementById("barcodeScannerInput").value;
+
+        //clear barcodeScannerInput
+        document.getElementById("barcodeScannerInput").value = "";
+
+        //using barcodeInput 
+        const searchResponse = await fetch(
+            `https://api.gbif.org/v1/occurrence/search?basisOfRecord=PRESERVED_SPECIMEN&basisOfRecord=FOSSIL_SPECIMEN&publishingOrg=75642970-f855-11dd-8235-b8a03c50a862&catalog_number=${barcode}`
+        );
+
+        const searchData = await searchResponse.json();
+        
+        //reset errorMessage
+        document.getElementById("errorMessage").style.display = "none";
+
+        barcodeInput.classList.add("hiddenScanner");
+
+        //what happens if the specimen hasn't been found ?
+        if (searchData.results.length === 0) {
+            const errorMessage = document.getElementById("errorMessage");
+
+            errorMessage.style.display = "block";
+
+            document.getElementById("barcodeScannerInput").value = "";
+            barcodeInput.classList.remove("hiddenScanner");
+
+            setTimeout(() => {
+                errorMessage.style.display = "none";
+            }, 3000);
+
+            return;
+        }
+
+        const occurrenceId = searchData.results[0].key;
+
+        const response = await fetch(
+            `https://api.gbif.org/v1/occurrence/${occurrenceId}`
+        );
+
+        const data = await response.json();
+
+        //formatting date 
+        let formattedDate = "Unknown";
+
+        //formating date
+        if (data.eventDate) {
+            const date = new Date(data.eventDate);
+            formattedDate = date.toLocaleDateString('de-de');
+        }
+
+        //checking if image is available
+        let image = "";
+
+        if (data.media && data.media.length > 0 && data.media[0].identifier) {
+            image = `
+                <img 
+                    class="specimenImage"
+                    src="${data.media[0].identifier}"
+                    alt="Specimen image">
+            `;
+        } else {
+            image = '<p id="noImageMessage">No image available</p>';
+        }
+
+        //hiding scannerPage in order to display specimenPage
+        document.getElementById("scannerPage").style.display = "none";
+        document.getElementById("header").style.display = "none";
+        document.getElementById("output").style.display = "grid";
+
+        //add specimenInfo to the output container
+        document.getElementById("specimenInfo").innerHTML = `
+                <h2><i>${data.scientificName ?? "Unknown species"}</i></h2>
+                <p>Kingdom: ${data.kingdom ?? "Unknown"}</p>
+                <p>Family: ${data.family ?? "Unknown"}</p>
+                <p>Location: ${data.country ?? "Unknown"}</p>
+                <p>Date collected: ${formattedDate}</p>
+                <p>Collector:<br> ${data.recordedBy ?? "Unknown"}</p>
+                <button id="goBackButton" onclick="goBack()">Scan another Specimen</button>
+            `;
+
+        //if auto = true → no button + 30s timer
+        //if auto = false → show button + no timer
+
+        if (auto) {
+            //Hide Go Back button
+            document.getElementById("goBackButton").style.display = "none";
+
+            //Automatically go back after 30 seconds
+            clearTimeout(backTimer);
+            backTimer = setTimeout(goBack, 30000);
+
+        } else {
+            //Show Go Back button
+            document.getElementById("goBackButton").style.display = "block";
+        }
+
+        //put image inside imageContainer
+        document.getElementById("imageContainer").innerHTML = image;
+        //map
+        const latitude = data.decimalLatitude;
+        const longitude = data.decimalLongitude;
+
+        if (marker) {
+            marker.remove();
+            marker = null;
+        }
+
+        if (latitude != null && longitude != null) {
+
+            // Valid specimen location
+            leaflet.setView([latitude, longitude], 13);
+
+            marker = L.marker([
+                latitude,
+                longitude
+            ]);
+
+            marker.addTo(leaflet);
+
+        } else {
+
+            // No specimen location → show luxembourg with no marker
+            leaflet.setView([49.8153, 6.1296], 7);
+        }
+    }
+    //end of getData function
+
+    //activates getData() function if user pushes "enter" key
+    document.getElementById("barcodeScannerInput").addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+            getData();
+        }
+    });
+
+    //map - removes leaflet usual marker location
+    delete L.Icon.Default.prototype._getIconUrl;
+
+    //get the marker from local folder
+    L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "images/marker-icon-2x.png",
+        iconUrl: "images/marker-icon.png",
+        shadowUrl: "images/marker-shadow.png"
+    });
+</script>
+</html>
