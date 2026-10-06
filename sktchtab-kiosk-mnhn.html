@@ -32,6 +32,12 @@
         rel="stylesheet"
     >
 
+    <!-- =========================================================
+         SKETCHFAB VIEWER API
+         ========================================================= -->
+
+    <script src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
+
     <style>
 
         /* =========================================================
@@ -621,6 +627,128 @@
 
 
         /* =========================================================
+           VIEW MODE BUTTONS (lower right of viewer)
+           ========================================================= */
+
+        #view-modes {
+
+            position:
+                absolute;
+
+            right:
+                0;
+
+            bottom:
+                0;
+
+            z-index:
+                1000;
+
+            display:
+                flex;
+
+            gap:
+                10px;
+
+            padding:
+                15px;
+
+            /* Opaque so it also covers Sketchfab's own Inspector icon underneath */
+            background:
+                rgba(0, 28, 38, 0.92);
+
+            border-top-left-radius:
+                var(--border-radius);
+
+        }
+
+
+        .view-mode-btn {
+
+            padding:
+                12px 18px;
+
+            background:
+                rgba(153, 153, 204, 0.12);
+
+            border:
+                2px solid
+                var(--accent-purple);
+
+            border-radius:
+                var(--border-radius);
+
+            color:
+                var(--accent-purple);
+
+            font-family:
+                'Inter',
+                Arial,
+                sans-serif;
+
+            font-size:
+                1rem;
+
+            font-weight:
+                600;
+
+            cursor:
+                pointer;
+
+            touch-action:
+                manipulation;
+
+            -webkit-tap-highlight-color:
+                transparent;
+
+            appearance:
+                none;
+
+            -webkit-appearance:
+                none;
+
+            transition:
+                background 150ms ease,
+                color 150ms ease,
+                transform 150ms ease;
+
+        }
+
+
+        .view-mode-btn.active {
+
+            background:
+                var(--accent-green);
+
+            border-color:
+                var(--accent-green);
+
+            color:
+                var(--bg-color);
+
+        }
+
+
+        .view-mode-btn:active {
+
+            transform:
+                scale(0.96);
+
+        }
+
+
+        .view-mode-btn:disabled {
+
+            opacity:
+                0.4;
+
+            pointer-events:
+                none;
+
+        }
+
+
+        /* =========================================================
            IFRAME WRAPPER
            ========================================================= */
 
@@ -737,6 +865,28 @@
         >
             ← Back
         </button>
+
+
+        <!--
+             VIEW MODE BUTTONS
+             Also outside the iframe, lower right.
+        -->
+
+        <div id="view-modes">
+
+            <button
+                type="button"
+                class="view-mode-btn active"
+                data-mode="textures"
+            >Textures</button>
+
+            <button
+                type="button"
+                class="view-mode-btn"
+                data-mode="wireframe"
+            >Wireframe</button>
+
+        </div>
 
 
         <div id="iframe-wrapper">
@@ -1394,6 +1544,465 @@
 
 
         /* =========================================================
+           VIEW MODES (textures / wireframe)
+           ========================================================= */
+
+        /* Wireframe line colour, RRGGBBAA (black) */
+        const WIREFRAME_COLOR =
+            '000000FF';
+
+        /* Surface colour of the untextured model in wireframe view */
+        const CLAY_COLOR =
+            [0.78, 0.78, 0.78];
+
+        /* Material channels that hold the base colour / texture */
+        const COLOR_CHANNELS =
+            ['AlbedoPBR', 'DiffuseColor', 'DiffusePBR'];
+
+        /* Sketchfab Viewer API instance of the open model */
+        let viewerApi =
+            null;
+
+        /* Guards against late callbacks after the viewer was closed */
+        let viewerSession =
+            0;
+
+        /* Original materials of the open model (for restoring textures) */
+        let originalMaterials =
+            null;
+
+        let currentMode =
+            'textures';
+
+        let modeBusy =
+            false;
+
+        let modeBusyTimer =
+            null;
+
+
+        function updateModeButtons(
+            activeMode
+        ) {
+
+            document
+                .querySelectorAll(
+                    '.view-mode-btn'
+                )
+                .forEach(
+                    btn => {
+
+                        btn.classList.toggle(
+                            'active',
+                            btn.dataset.mode ===
+                            activeMode
+                        );
+
+                    }
+                );
+
+        }
+
+
+        function setModeButtonsEnabled(
+            enabled
+        ) {
+
+            document
+                .querySelectorAll(
+                    '.view-mode-btn'
+                )
+                .forEach(
+                    btn => {
+
+                        btn.disabled =
+                            !enabled;
+
+                    }
+                );
+
+        }
+
+
+        function finishModeChange() {
+
+            clearTimeout(
+                modeBusyTimer
+            );
+
+            modeBusy =
+                false;
+
+            if (
+                viewerApi
+            ) {
+
+                setModeButtonsEnabled(
+                    true
+                );
+
+            }
+
+        }
+
+
+        /*
+         * Sends every material to the viewer and calls
+         * done(error) when all of them have been applied.
+         */
+        function applyMaterials(
+            api,
+            materials,
+            done
+        ) {
+
+            let pending =
+                materials.length;
+
+            let failure =
+                null;
+
+            if (
+                pending === 0
+            ) {
+
+                done(null);
+
+                return;
+
+            }
+
+            materials.forEach(
+                material => {
+
+                    api.setMaterial(
+                        material,
+                        err => {
+
+                            if (
+                                err
+                            ) {
+
+                                failure =
+                                    err;
+
+                            }
+
+                            pending--;
+
+                            if (
+                                pending === 0
+                            ) {
+
+                                done(failure);
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+        }
+
+
+        /*
+         * WIREFRAME VIEW:
+         * remove textures (plain grey surface) + black wireframe.
+         */
+        function showWireframeView(
+            api,
+            done
+        ) {
+
+            api.getMaterialList(
+                (err, materials) => {
+
+                    if (
+                        err
+                    ) {
+
+                        done(err);
+
+                        return;
+
+                    }
+
+                    /* Keep the originals once, so textures can be restored */
+                    if (
+                        !originalMaterials
+                    ) {
+
+                        originalMaterials =
+                            JSON.parse(
+                                JSON.stringify(
+                                    materials
+                                )
+                            );
+
+                    }
+
+                    materials.forEach(
+                        material => {
+
+                            COLOR_CHANNELS.forEach(
+                                name => {
+
+                                    const channel =
+                                        material.channels[name];
+
+                                    if (
+                                        channel
+                                    ) {
+
+                                        channel.enable =
+                                            true;
+
+                                        delete channel.texture;
+
+                                        channel.color =
+                                            CLAY_COLOR.slice();
+
+                                    }
+
+                                }
+                            );
+
+                            if (
+                                material.channels.EmitColor
+                            ) {
+
+                                material.channels.EmitColor.enable =
+                                    false;
+
+                            }
+
+                        }
+                    );
+
+                    applyMaterials(
+                        api,
+                        materials,
+                        applyError => {
+
+                            if (
+                                applyError
+                            ) {
+
+                                done(applyError);
+
+                                return;
+
+                            }
+
+                            api.setWireframe(
+                                true,
+                                {
+                                    color:
+                                        WIREFRAME_COLOR
+                                },
+                                done
+                            );
+
+                        }
+                    );
+
+                }
+            );
+
+        }
+
+
+        /*
+         * TEXTURE VIEW:
+         * wireframe off + original materials restored.
+         */
+        function showTextureView(
+            api,
+            done
+        ) {
+
+            api.setWireframe(
+                false,
+                {},
+                err => {
+
+                    if (
+                        err
+                    ) {
+
+                        console.warn(
+                            'setWireframe failed:',
+                            err
+                        );
+
+                    }
+
+                    if (
+                        !originalMaterials
+                    ) {
+
+                        done(null);
+
+                        return;
+
+                    }
+
+                    applyMaterials(
+                        api,
+                        JSON.parse(
+                            JSON.stringify(
+                                originalMaterials
+                            )
+                        ),
+                        done
+                    );
+
+                }
+            );
+
+        }
+
+
+        function applyViewMode(
+            mode
+        ) {
+
+            if (
+                !viewerApi ||
+                modeBusy ||
+                mode === currentMode
+            ) {
+
+                return;
+
+            }
+
+            const api =
+                viewerApi;
+
+            modeBusy =
+                true;
+
+            setModeButtonsEnabled(
+                false
+            );
+
+            /* Safety net: never leave the buttons locked */
+            modeBusyTimer =
+                setTimeout(
+                    finishModeChange,
+                    8000
+                );
+
+            const finished =
+                err => {
+
+                    if (
+                        err
+                    ) {
+
+                        console.warn(
+                            'View mode change failed:',
+                            err
+                        );
+
+                    }
+
+                    /* Viewer was closed or replaced meanwhile */
+                    if (
+                        viewerApi !== api
+                    ) {
+
+                        return;
+
+                    }
+
+                    currentMode =
+                        mode;
+
+                    updateModeButtons(
+                        mode
+                    );
+
+                    finishModeChange();
+
+                };
+
+            if (
+                mode === 'wireframe'
+            ) {
+
+                showWireframeView(
+                    api,
+                    finished
+                );
+
+            } else {
+
+                showTextureView(
+                    api,
+                    finished
+                );
+
+            }
+
+        }
+
+
+        function setupViewModeButtons() {
+
+            document
+                .querySelectorAll(
+                    '.view-mode-btn'
+                )
+                .forEach(
+                    btn => {
+
+                        btn.addEventListener(
+                            'click',
+                            function(event) {
+
+                                event.preventDefault();
+
+                                event.stopPropagation();
+
+                                applyViewMode(
+                                    btn.dataset.mode
+                                );
+
+                            }
+                        );
+
+                    }
+                );
+
+        }
+
+
+        function resetViewModeState() {
+
+            viewerApi =
+                null;
+
+            originalMaterials =
+                null;
+
+            currentMode =
+                'textures';
+
+            modeBusy =
+                false;
+
+            clearTimeout(
+                modeBusyTimer
+            );
+
+        }
+
+
+        /* =========================================================
            OPEN MODEL
            ========================================================= */
 
@@ -1412,42 +2021,18 @@
                     'iframe'
                 );
 
-            const embedUrl =
-                `https://sketchfab.com/models/${uid}/embed` +
+            const session =
+                ++viewerSession;
 
-                `?autostart=1` +
+            resetViewModeState();
 
-                `&ui_animations=0` +
+            setModeButtonsEnabled(
+                false
+            );
 
-                `&ui_infos=0` +
-
-                `&ui_stop=0` +
-
-                `&ui_inspector=0` +
-
-                `&ui_watermark_link=0` +
-
-                `&ui_watermark=0` +
-
-                `&ui_ar=0` +
-
-                `&ui_help=0` +
-
-                `&ui_settings=0` +
-
-                `&ui_vr=0` +
-
-                `&ui_fullscreen=0` +
-
-                `&ui_annotations=0`;
-
-
-            /*
-             * Set the iframe source first.
-             */
-
-            iframe.src =
-                embedUrl;
+            updateModeButtons(
+                'textures'
+            );
 
 
             /*
@@ -1456,6 +2041,98 @@
 
             viewer.style.display =
                 'block';
+
+
+            /*
+             * Initialise the Sketchfab Viewer API on the iframe.
+             * This sets the iframe source itself.
+             *
+             * NOTE: ui_inspector is intentionally NOT set, because
+             * setWireframe() does not work with ui_inspector: 0.
+             * The Inspector icon is hidden behind the #view-modes bar.
+             */
+
+            const client =
+                new Sketchfab(
+                    '1.12.1',
+                    iframe
+                );
+
+            client.init(
+                uid,
+                {
+
+                    autostart: 1,
+
+                    ui_animations: 0,
+
+                    ui_infos: 0,
+
+                    ui_stop: 0,
+
+                    ui_watermark_link: 0,
+
+                    ui_watermark: 0,
+
+                    ui_ar: 0,
+
+                    ui_help: 0,
+
+                    ui_settings: 0,
+
+                    ui_vr: 0,
+
+                    ui_fullscreen: 0,
+
+                    ui_annotations: 0,
+
+                    success: function(api) {
+
+                        /* Viewer was closed in the meantime */
+                        if (
+                            session !==
+                            viewerSession
+                        ) {
+
+                            return;
+
+                        }
+
+                        api.addEventListener(
+                            'viewerready',
+                            function() {
+
+                                if (
+                                    session !==
+                                    viewerSession
+                                ) {
+
+                                    return;
+
+                                }
+
+                                viewerApi =
+                                    api;
+
+                                setModeButtonsEnabled(
+                                    true
+                                );
+
+                            }
+                        );
+
+                    },
+
+                    error: function() {
+
+                        console.error(
+                            'Sketchfab viewer failed to initialise'
+                        );
+
+                    }
+
+                }
+            );
 
 
             /*
@@ -1482,6 +2159,15 @@
                 document.getElementById(
                     'iframe'
                 );
+
+
+            /*
+             * Invalidate pending Viewer API callbacks.
+             */
+
+            viewerSession++;
+
+            resetViewModeState();
 
 
             /*
@@ -1816,6 +2502,14 @@
                  */
 
                 setupViewerBackButton();
+
+
+                /*
+                 * Connect the view-mode buttons
+                 * (textures / wireframe).
+                 */
+
+                setupViewModeButtons();
 
 
                 /*
