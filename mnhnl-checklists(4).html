@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNHNL checklists on ChecklistBank</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#667085; --line:#e3e6eb; --accent:#1f6feb; --accent-ink:#fff; --warn:#b54708; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1c2027; --ink:#e8eaee; --muted:#9aa3b2; --line:#2e343e; --accent:#4c8dff; --accent-ink:#0b1220; --warn:#f5a45d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  header, main { max-width: 1250px; margin: 0 auto; padding: 16px 20px; }
+  h1 { font-size: 1.35rem; margin: 8px 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 12px; }
+  .bar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; position:sticky; top:0; z-index:5; }
+  .bar .grow { flex:1 1 220px; }
+  input[type=search] { width:100%; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); }
+  button { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 12px; border-radius:8px; font:inherit; }
+  button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  label.chk { display:inline-flex; gap:6px; align-items:center; color:var(--muted); font-size:.9rem; }
+  .tablewrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; margin-top:12px; }
+  table { border-collapse:collapse; width:100%; min-width:980px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
+  th.nosort { cursor:default; }
+  tr:last-child td { border-bottom:none; }
+  tr.sel { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  td.title { min-width:260px; }
+  td.title .t { font-weight:600; }
+  td.title .d { color:var(--muted); font-size:.85rem; margin-top:2px; max-height:3.9em; overflow:hidden; }
+  .tag { display:inline-block; font-size:.75rem; padding:1px 7px; border:1px solid var(--line); border-radius:99px; color:var(--muted); margin:0 4px 2px 0; white-space:nowrap; }
+  a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+  .links a { display:block; white-space:nowrap; }
+  .num { text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  .status { margin:12px 0; color:var(--muted); }
+  .error { color:var(--warn); }
+  #log { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-top:12px; font-size:.88rem; max-height:220px; overflow:auto; white-space:pre-wrap; display:none; }
+  progress { width:220px; height:10px; vertical-align:middle; }
+  .nowrap { white-space:nowrap; }
+  #panel { display:none; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-top:12px; }
+  #panel .ph { display:flex; align-items:center; gap:10px; font-weight:600; }
+  #panel progress { width:100%; height:12px; margin:8px 0; }
+  .spin { width:16px; height:16px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; flex:none; }
+  .spin.off { animation:none; border-top-color:var(--line); }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  #phList { display:grid; grid-template-columns: minmax(160px,1fr) 110px 1fr; gap:4px 12px; font-size:.88rem; align-items:center; margin-top:6px; }
+  #phList progress { margin:0; height:8px; }
+  .st-run { color:var(--accent); } .st-ok { color:#1a7f37; } .st-err { color:var(--warn); } .st-wait { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MNHNL checklists on ChecklistBank</h1>
+  <p class="sub">All checklist datasets published by the Musée national d'histoire naturelle Luxembourg (GBIF publisher key <code id="pubkey"></code>). Select one or more and download a merged taxa table.</p>
+</header>
+
+<main>
+  <div class="bar">
+    <div class="grow"><input type="search" id="filter" placeholder="Filter datasets by title, alias, key, type…"></div>
+    <label class="chk"><input type="checkbox" id="selAll"> select all shown</label>
+    <label class="chk"><input type="checkbox" id="optMerge" checked> merge identical names (one row per name)</label>
+    <span id="selCount" class="nowrap">0 selected</span>
+    <button class="primary" id="btnDl" disabled>Download merged taxa (CSV)</button>
+  </div>
+
+  <div class="status" id="status">Loading datasets…</div>
+  <div id="panel">
+    <div class="ph"><span class="spin" id="spin"></span><span id="phTitle"></span></div>
+    <progress id="prog" value="0" max="1"></progress>
+    <div id="phList"></div>
+    <div id="log"></div>
+    <div id="phDone" class="status"></div>
+  </div>
+  <div class="tablewrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th class="nosort"></th>
+          <th data-k="title">Dataset</th>
+          <th data-k="created">Registered in CLB</th>
+          <th data-k="issued">Issued</th>
+          <th data-k="modified">Last modified</th>
+          <th data-k="version">Version</th>
+          <th data-k="size" class="num">Names</th>
+          <th data-k="origin">Origin / type</th>
+          <th data-k="license">License</th>
+          <th class="nosort">Links</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const API = 'https://api.checklistbank.org';
+  const PUBLISHER = '75642970-f855-11dd-8235-b8a03c50a862';
+  const PAGE_DATASETS = 100;
+  const PAGE_USAGES = 1000;
+  const MAX_DEEP_OFFSET = 10000; // search backends often refuse deeper paging; we warn if hit
+
+  document.getElementById('pubkey').textContent = PUBLISHER;
+
+  const $ = id => document.getElementById(id);
+  const state = { datasets: [], selected: new Set(), sortKey: 'created', sortDir: 1, filter: '' };
+
+  /* ---------- helpers ---------- */
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmtDate = v => { if (!v) return ''; const d = new Date(v); return isNaN(d) ? String(v).slice(0,10) : d.toISOString().slice(0,10); };
+  const stripHtml = s => String(s ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  async function getJson(url, tries = 3) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try {
+        const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!r.ok) {
+          let body = ''; try { body = (await r.text()).slice(0, 300); } catch (_) {}
+          const err = new Error('HTTP ' + r.status + ' for ' + url + (body ? ' – ' + body : ''));
+          err.noRetry = r.status >= 400 && r.status < 500;
+          throw err;
+        }
+        return await r.json();
+      } catch (e) {
+        lastErr = e;
+        if (e.noRetry) break;
+        await sleep(500 * (i + 1));
+      }
+    }
+    throw lastErr;
+  }
+  function log(msg) { const l = $('log'); l.style.display = 'block'; l.textContent += msg + '\n'; l.scrollTop = l.scrollHeight; }
+
+  /* ---------- load datasets ---------- */
+  async function loadDatasets() {
+    const all = [];
+    let offset = 0;
+    for (;;) {
+      const url = `${API}/dataset?offset=${offset}&limit=${PAGE_DATASETS}&full=false&gbifPublisherKey=${PUBLISHER}`;
+      const page = await getJson(url);
+      const items = page.result || [];
+      all.push(...items);
+      offset += items.length;
+      if (!items.length || page.last === true || (page.total != null && offset >= page.total)) break;
+    }
+    return all;
+  }
+
+  /* ---------- render ---------- */
+  function visible() {
+    const q = state.filter.toLowerCase();
+    let list = state.datasets.filter(d => !q || [d.title, d.alias, d.key, d.type, d.origin, d.version, d.license, d.doi]
+      .some(v => String(v ?? '').toLowerCase().includes(q)));
+    const k = state.sortKey, dir = state.sortDir;
+    list.sort((a, b) => {
+      let x = a[k], y = b[k];
+      if (k === 'size') { x = +x || 0; y = +y || 0; return (x - y) * dir; }
+      x = String(x ?? ''); y = String(y ?? '');
+      return x.localeCompare(y, undefined, { numeric: true }) * dir;
+    });
+    return list;
+  }
+
+  function render() {
+    const list = visible();
+    $('rows').innerHTML = list.map(d => {
+      const clb = `https://www.checklistbank.org/dataset/${d.key}/about`;
+      const clbNames = `https://www.checklistbank.org/dataset/${d.key}/names`;
+      const apiUrl = `${API}/dataset/${d.key}`;
+      const gbif = d.gbifKey ? `https://www.gbif.org/dataset/${d.gbifKey}` : null;
+      const doi = d.doi ? `https://doi.org/${String(d.doi).replace(/^doi:/i, '')}` : null;
+      const desc = stripHtml(d.description);
+      return `<tr class="${state.selected.has(d.key) ? 'sel' : ''}">
+        <td><input type="checkbox" data-key="${esc(d.key)}" ${state.selected.has(d.key) ? 'checked' : ''}></td>
+        <td class="title">
+          <div class="t">${esc(d.title)}${d.alias ? ` <span class="tag">${esc(d.alias)}</span>` : ''}</div>
+          ${desc ? `<div class="d">${esc(desc)}</div>` : ''}
+          <div class="d">ID ${esc(d.key)}${d.confidence ? ` · confidence ${esc(d.confidence)}/5` : ''}${d.completeness != null ? ` · completeness ${esc(d.completeness)}%` : ''}</div>
+        </td>
+        <td class="nowrap">${fmtDate(d.created)}</td>
+        <td class="nowrap">${fmtDate(d.issued)}</td>
+        <td class="nowrap">${fmtDate(d.modified)}</td>
+        <td>${esc(d.version)}</td>
+        <td class="num">${d.size != null ? Number(d.size).toLocaleString() : ''}</td>
+        <td>${d.origin ? `<span class="tag">${esc(d.origin)}</span>` : ''}${d.type ? `<span class="tag">${esc(d.type)}</span>` : ''}</td>
+        <td>${esc(d.license)}</td>
+        <td class="links">
+          <a href="${clb}" target="_blank" rel="noopener">ChecklistBank</a>
+          <a href="${clbNames}" target="_blank" rel="noopener">Browse names</a>
+          ${gbif ? `<a href="${gbif}" target="_blank" rel="noopener">GBIF</a>` : ''}
+          ${doi ? `<a href="${doi}" target="_blank" rel="noopener">DOI</a>` : ''}
+          <a href="${apiUrl}" target="_blank" rel="noopener">API record</a>
+        </td>
+      </tr>`;
+    }).join('');
+    $('status').textContent = `${state.datasets.length} datasets from this publisher` + (list.length !== state.datasets.length ? ` (${list.length} shown)` : '');
+    updateSel();
+  }
+
+  function updateSel() {
+    $('selCount').textContent = state.selected.size + ' selected';
+    $('btnDl').disabled = state.selected.size === 0;
+    const list = visible();
+    $('selAll').checked = list.length > 0 && list.every(d => state.selected.has(d.key));
+  }
+
+  /* ---------- events ---------- */
+  $('rows').addEventListener('change', e => {
+    const k = e.target.dataset.key; if (!k) return;
+    e.target.checked ? state.selected.add(k) : state.selected.delete(k);
+    e.target.closest('tr').classList.toggle('sel', e.target.checked);
+    updateSel();
+  });
+  $('selAll').addEventListener('change', e => {
+    visible().forEach(d => e.target.checked ? state.selected.add(d.key) : state.selected.delete(d.key));
+    render();
+  });
+  $('filter').addEventListener('input', e => { state.filter = e.target.value; render(); });
+  document.querySelectorAll('th[data-k]').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    if (state.sortKey === k) state.sortDir *= -1; else { state.sortKey = k; state.sortDir = 1; }
+    render();
+  }));
+  $('btnDl').addEventListener('click', () => buildMerged().catch(e => { log('✘ Unexpected error: ' + e.message); $('panel').style.display = 'block'; $('spin').classList.add('off'); $('phTitle').textContent = 'Failed – see messages below'; $('btnDl').disabled = state.selected.size === 0; }));
+
+  /* ---------- fetch taxa of one dataset via /dataset/{key}/taxon ---------- */
+  async function fetchDatasetTaxa(ds, onProgress) {
+    const base = `${API}/dataset/${ds.key}/taxon`;
+    let limit = 1000, offset = 0, total = null;
+    const out = [];
+    for (;;) {
+      let page;
+      try {
+        page = await getJson(`${base}?offset=${offset}&limit=${limit}`);
+      } catch (e) {
+        if (limit > 100) { // retry once with a smaller page size
+          log(`… ${ds.alias || ds.title}: ${e.message} – retrying with limit=100`);
+          limit = 100;
+          page = await getJson(`${base}?offset=${offset}&limit=${limit}`);
+        } else throw e;
+      }
+      const items = page.result || [];
+      total = page.total ?? total;
+      out.push(...items);
+      offset += items.length;
+      onProgress(offset, total);
+      if (!items.length || page.last === true || (total != null && offset >= total)) break;
+    }
+    return out;
+  }
+
+  function normalize(u) {
+    const n = u.name || {};
+    return {
+      id: u.id || '',
+      scientificName: n.scientificName || u.label || '',
+      authorship: n.authorship || '',
+      rank: n.rank || '',
+      status: u.status || '',
+      genus: n.genus || n.uninomial || '',
+      namesIndexId: n.namesIndexId ?? ''
+    };
+  }
+
+  /* ---------- progress panel ---------- */
+  const rowsUi = new Map();
+  function panelStart(chosen) {
+    $('panel').style.display = 'block';
+    $('log').textContent = ''; $('log').style.display = 'none';
+    $('phDone').innerHTML = '';
+    $('spin').classList.remove('off');
+    $('phTitle').textContent = `Retrieval started – ${chosen.length} dataset${chosen.length > 1 ? 's' : ''} selected`;
+    $('prog').max = 1; $('prog').value = 0;
+    rowsUi.clear();
+    $('phList').innerHTML = chosen.map(d => `
+      <div>${esc(d.alias || d.title)}</div>
+      <div class="st-wait" data-st="${esc(d.key)}">waiting</div>
+      <div><progress data-pb="${esc(d.key)}" value="0" max="1"></progress></div>`).join('');
+    chosen.forEach(d => rowsUi.set(d.key, {
+      st: $('phList').querySelector(`[data-st="${d.key}"]`),
+      pb: $('phList').querySelector(`[data-pb="${d.key}"]`)
+    }));
+    $('panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function setRow(key, cls, text, val, max) {
+    const r = rowsUi.get(key); if (!r) return;
+    r.st.className = cls; r.st.textContent = text;
+    if (max != null) { r.pb.max = max || 1; r.pb.value = val || 0; }
+  }
+
+  /* ---------- merge + export ---------- */
+  async function buildMerged() {
+    const chosen = state.datasets.filter(d => state.selected.has(d.key));
+    if (!chosen.length) { alert('No dataset selected.'); return; }
+    const merge = $('optMerge').checked;
+    $('btnDl').disabled = true;
+    panelStart(chosen);
+
+    const rows = [];
+    const merged = new Map();
+    let failed = 0, fetched = 0;
+
+    for (let i = 0; i < chosen.length; i++) {
+      const ds = chosen[i];
+      const label = ds.alias || ds.title;
+      $('phTitle').textContent = `Retrieving taxa – dataset ${i + 1} of ${chosen.length}: ${label}`;
+      setRow(ds.key, 'st-run', 'starting…', 0, 1);
+      $('prog').max = chosen.length; $('prog').value = i;
+      try {
+        const recs = await fetchDatasetTaxa(ds, (n, total) => {
+          setRow(ds.key, 'st-run', `${n.toLocaleString()}${total ? ' / ' + total.toLocaleString() : ''}`, n, total || n);
+          $('prog').value = i + (total ? Math.min(n / total, 1) : 0);
+        });
+        for (const rec of recs) {
+          const t = normalize(rec);
+          if (!t.scientificName) continue;
+          const src = { key: ds.key, title: ds.title, alias: ds.alias || '', id: t.id };
+          if (merge) {
+            const k = [t.scientificName, t.authorship, t.rank, t.status].join('|').toLowerCase();
+            let m = merged.get(k);
+            if (!m) { m = { ...t, sources: [] }; merged.set(k, m); }
+            if (!m.sources.some(s => s.key === ds.key)) m.sources.push(src);
+          } else {
+            rows.push({ ...t, sources: [src] });
+          }
+        }
+        fetched += recs.length;
+        setRow(ds.key, 'st-ok', `✔ ${recs.length.toLocaleString()} taxa`, 1, 1);
+      } catch (e) {
+        failed++;
+        setRow(ds.key, 'st-err', '✘ failed', 0, 1);
+        log(`✘ ${label}: ${e.message}`);
+      }
+    }
+
+    $('prog').value = chosen.length;
+    $('spin').classList.add('off');
+    $('btnDl').disabled = false;
+
+    const final = merge ? [...merged.values()] : rows;
+    final.sort((a, b) => a.scientificName.localeCompare(b.scientificName));
+    if (!final.length) {
+      $('phTitle').textContent = 'Finished – no taxa retrieved';
+      log('✘ No taxa retrieved – see messages above.');
+      return;
+    }
+
+    const header = ['scientificName','authorship','rank','status','genus','namesIndexId',
+      'numberOfLists','listTitles','listDatasetKeys','idsInLists'];
+    const lines = [header.join(',')];
+    const csv = v => { v = String(v ?? ''); return /[",\n\r;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    for (const r of final) {
+      lines.push([
+        r.scientificName, r.authorship, r.rank, r.status, r.genus, r.namesIndexId,
+        r.sources.length,
+        r.sources.map(s => s.title).join(' | '),
+        r.sources.map(s => s.key).join(' | '),
+        r.sources.map(s => `${s.key}:${s.id}`).join(' | ')
+      ].map(csv).join(','));
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const fname = `mnhnl-merged-taxa-${new Date().toISOString().slice(0,10)}.csv`;
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+
+    $('phTitle').textContent = failed ? `Finished with ${failed} failed dataset(s)` : 'Finished – CSV downloaded';
+    $('phDone').innerHTML = `${fetched.toLocaleString()} taxa retrieved → ${final.length.toLocaleString()} rows in CSV` +
+      ` · <a href="${url}" download="${fname}">download again</a>`;
+  }
+
+  /* ---------- init ---------- */
+  loadDatasets().then(list => { state.datasets = list.map(d => ({ ...d, key: String(d.key) })); render(); })
+    .catch(e => { $('status').innerHTML = `<span class="error">Could not load datasets: ${esc(e.message)}</span>`; });
+})();
+</script>
+</body>
+</html>
