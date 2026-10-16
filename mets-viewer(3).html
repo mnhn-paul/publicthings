@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>METS Event Viewer</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d2420;--mut:#6b756e;--card:#fff;--bd:#dcdfd8;--ac:#2f6b4f;--ac2:#e6f0ea;--err:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#161a17;--fg:#e6eae6;--mut:#93a097;--card:#1e2420;--bd:#333c36;--ac:#6fc29a;--ac2:#243229;--err:#f2867e}}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:1150px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:0}h3{font-size:14px;margin:16px 0 8px;color:var(--mut)}
+.sub,.m{color:var(--mut)}.sub{margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+textarea,input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:84px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
+button,label.btn{padding:8px 13px;border:1px solid var(--ac);border-radius:8px;background:var(--ac);color:var(--bg);font:inherit;cursor:pointer}
+button.sec,label.sec{background:transparent;color:var(--ac)}
+button.x{border-color:var(--err);color:var(--err);background:transparent}
+details.opt{margin-top:10px;color:var(--mut)}details.opt summary{cursor:pointer}details.opt .row{margin-top:8px}
+a{color:var(--ac)}
+#msg{margin-top:10px}.err{color:var(--err)}
+.bar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin:22px 0 12px}
+.blk>summary{cursor:pointer;font-size:16px}
+.tw{overflow-x:auto;border:1px solid var(--bd);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:700px}
+th,td{padding:8px 11px;text-align:left;border-bottom:1px solid var(--bd);vertical-align:top;white-space:nowrap}
+th{background:var(--ac2);font-size:13px}tr:last-child td{border-bottom:0}
+.pg a{display:inline-block;margin:0 4px 2px 0;padding:0 7px;border:1px solid var(--bd);border-radius:12px;text-decoration:none;font-size:13px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}dt{color:var(--mut)}dd{margin:0;overflow-wrap:anywhere}
+.acts{margin-top:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>METS Event Viewer</h1>
+<p class="sub">Extracts event notes from one or more METS/MODS files, shows the pages they are on, and exports table, Darwin Core Event Core or Excel.</p>
+
+<div class="card">
+  <textarea id="urls" aria-label="METS URLs" placeholder="One METS URL (or record ID) per line">https://face.mnhn.gov.lu/viewer/sourcefile?id=MNHNL2024-6-01</textarea>
+  <div class="row" style="margin-top:10px">
+    <button id="go">Load</button>
+    <label class="btn sec">Open XML file(s)<input type="file" id="file" accept=".xml,text/xml" multiple hidden></label>
+    <button class="sec x" id="clear">Clear all</button>
+  </div>
+  <details class="opt">
+    <summary>Options (CORS proxy, record IDs)</summary>
+    <div class="row"><input type="text" id="proxy" placeholder="Optional proxy prefix, e.g. https://corsproxy.example/?url="></div>
+    <p>A bare record ID such as <code>MNHNL2024-6-01</code> is expanded to <code>https://face.mnhn.gov.lu/viewer/sourcefile?id=…</code>. Loading a URL that is already shown replaces its block.</p>
+  </details>
+  <div id="msg"></div>
+</div>
+
+<div id="out" hidden>
+  <div class="bar">
+    <h2>Records <span id="total" class="m"></span></h2>
+    <div class="row">
+      <button class="sec" data-act="open">Expand all</button><button class="sec" data-act="close">Collapse all</button>
+    </div>
+  </div>
+  <div id="blocks"></div>
+  <div class="card">
+    <strong>Combined download (all loaded records)</strong>
+    <div class="row acts">
+      <button class="sec" data-act="table" data-i="all">Table CSV</button>
+      <button data-act="dwc" data-i="all">Darwin Core CSV</button>
+      <button data-act="xlsx" data-i="all">Excel</button>
+    </div>
+  </div>
+</div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const all=(n,ln)=>n?[...n.getElementsByTagName('*')].filter(e=>e.localName===ln):[];
+const first=(n,ln)=>all(n,ln)[0];
+const txt=e=>e?e.textContent.trim().replace(/\s+/g,' '):'';
+const XLINK='http://www.w3.org/1999/xlink';
+const DEFAULT_BASE='https://face.mnhn.gov.lu';
+const linkify=s=>/^(https?:|mailto:)/i.test(s)?`<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>`
+  :/^[^\s@]+@[^\s@]+$/.test(s)?`<a href="mailto:${esc(s)}">${esc(s)}</a>`:esc(s);
+const PREF=['DwCeventDate','DwCeventTime','DwClocality','eventTemperature','eventWeather'];
+const LABEL={DwCeventDate:'Date',DwCeventTime:'Time',DwClocality:'Locality',eventTemperature:'Temp. (°C)',eventWeather:'Weather'};
+const labelOf=c=>LABEL[c]||c.replace(/^DwC/,'');
+const pageUrl=(b,n)=>`${b.base}/viewer/fullscreen/${encodeURIComponent(b.docId)}/${n}/`;
+let blocks=[];
+
+function parseXml(t){
+  let d=new DOMParser().parseFromString(t,'application/xml');
+  if(d.getElementsByTagName('parsererror').length){
+    const ns=' xmlns:mets="http://www.loc.gov/METS/" xmlns:mods="http://www.loc.gov/mods/v3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dv="http://dfg-viewer.de/" xmlns:intranda="http://intranda.com/"';
+    d=new DOMParser().parseFromString(t.replace(/<mets:mets(?=[\s>])/,'<mets:mets'+ns),'application/xml');
+    if(d.getElementsByTagName('parsererror').length) throw new Error('Not valid XML: '+txt(d.getElementsByTagName('parsererror')[0]).slice(0,200));
+  }
+  return d;
+}
+
+function parse(xml,src){
+  const doc=parseXml(xml);
+  if(!all(doc,'mets').length) throw new Error('No METS root element found.');
+  const files={};
+  all(doc,'file').forEach(f=>{const l=first(f,'FLocat');if(l)files[f.getAttribute('ID')]=l.getAttribute('xlink:href')||l.getAttributeNS(XLINK,'href')||''});
+  const phys={};
+  all(doc,'div').filter(d=>/^PHYS_\d+$/.test(d.getAttribute('ID')||'')).forEach(d=>{
+    const fp=first(d,'fptr');phys[d.getAttribute('ID')]={order:+d.getAttribute('ORDER'),url:fp?files[fp.getAttribute('FILEID')]:''}});
+  const links={};
+  all(doc,'smLink').forEach(l=>{const f=l.getAttribute('xlink:from')||l.getAttributeNS(XLINK,'from'),t=l.getAttribute('xlink:to')||l.getAttributeNS(XLINK,'to');(links[f]=links[f]||[]).push(t)});
+  const dmd={};
+  all(doc,'dmdSec').forEach(s=>dmd[s.getAttribute('ID')]=s);
+  const notes=s=>all(s,'note').map(n=>[n.getAttribute('type')||'',txt(n)]);
+  const sm=all(doc,'structMap').find(s=>s.getAttribute('TYPE')==='LOGICAL');
+  const logs=sm?all(sm,'div').filter(d=>d.getAttribute('ID')):[];
+  const rows=[],colSet=new Set();
+  logs.forEach(d=>{
+    const sec=dmd[d.getAttribute('DMDID')];
+    const f={};if(sec)notes(sec).filter(([k])=>/^(DwC|event)/i.test(k)).forEach(([k,v])=>{f[k]=v;colSet.add(k)});
+    if(!Object.keys(f).length&&!/event/i.test(d.getAttribute('TYPE')||''))return;
+    const pages=(links[d.getAttribute('ID')]||[]).map(p=>phys[p]).filter(Boolean).sort((a,b)=>a.order-b.order);
+    rows.push({log:d.getAttribute('ID'),sec:d.getAttribute('DMDID')||'—',type:d.getAttribute('TYPE')||'',f,pages});
+  });
+  const cols=[...PREF.filter(c=>colSet.has(c)),...[...colSet].filter(c=>!PREF.includes(c)).sort()];
+  const docId=txt(first(doc,'recordIdentifier'))||((src.match(/[?&]id=([^&]+)/)||[])[1]||'');
+  let base=DEFAULT_BASE;try{if(/^https?:/i.test(src))base=new URL(src).origin}catch(e){}
+  const s0=(logs[0]&&dmd[logs[0].getAttribute('DMDID')])||Object.values(dmd)[0];
+  const nt=t=>all(s0,'note').filter(n=>n.getAttribute('type')===t).map(txt).join(' | ');
+  const meta={title:txt(first(s0,'title')),year:txt(first(s0,'dateIssued')),by:nt('ownership'),desc:nt('content')};
+  const hdr=first(doc,'metsHdr');
+  const info=[
+    ['Title',meta.title],['Identifier',docId],['Year',meta.year],['Description',meta.desc],['Owner / author',meta.by],
+    ['Shelf mark',txt(first(s0,'shelfLocator'))],['Location of original',txt(first(s0,'physicalLocation'))],['Extent',txt(first(s0,'extent'))],
+    ['Classification',all(s0,'classification').map(txt).join(' › ')],
+    ['Pages (scans)',Object.keys(phys).length],['Event sections',rows.length],
+    ['Catalogue record',txt(first(doc,'reference'))],['Viewer',txt(first(doc,'presentation'))],
+    ['Holding institution',txt(first(doc,'owner'))],['Institution site',txt(first(doc,'ownerSiteURL'))],['Contact',txt(first(doc,'ownerContact'))],
+    ['METS created',hdr?hdr.getAttribute('CREATEDATE'):''],['Generated by',txt(first(doc,'name'))],['Source',src]
+  ].filter(([,v])=>v!==''&&v!=null);
+  return {src,docId,base,meta,rows,cols,info,open:true,nPages:Object.keys(phys).length};
+}
+
+/* ---------- rendering ---------- */
+function tableHtml(b){
+  const head=['Section','Type',...b.cols.map(labelOf),'Pages'];
+  return '<div class="tw"><table><thead><tr>'+head.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr></thead><tbody>'+
+   b.rows.map(r=>'<tr><td>'+esc(r.sec)+'</td><td class="m">'+esc(r.type)+'</td>'+
+     b.cols.map(c=>r.f[c]?`<td>${esc(r.f[c])}</td>`:'<td class="m">–</td>').join('')+
+     '<td class="pg">'+(r.pages.length?r.pages.map(p=>`<a href="${esc(pageUrl(b,p.order))}" target="_blank" rel="noopener" title="Open page ${p.order} in viewer">${p.order}</a>`).join(''):'<span class="m">–</span>')+'</td></tr>').join('')+'</tbody></table></div>';
+}
+function blockHtml(b,i){
+  if(b.err) return `<div class="card"><strong class="err">Failed:</strong> <span class="m">${esc(b.src)}</span><div class="err">${esc(b.err)}</div>
+    <div class="row acts"><button class="x" data-act="rm" data-i="${i}">Remove</button></div></div>`;
+  return `<details class="card blk" data-i="${i}" ${b.open!==false?'open':''}>
+    <summary><strong>${esc(b.meta.title||b.docId)}</strong> <span class="m">· ${esc(b.docId)} · ${b.rows.length} events · ${b.nPages} pages</span></summary>
+    <h3>Document information</h3><dl>${b.info.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${linkify(String(v))}</dd>`).join('')}</dl>
+    <h3>Events</h3>${tableHtml(b)}
+    <div class="row acts">
+      <button class="sec" data-act="table" data-i="${i}">Table CSV</button>
+      <button data-act="dwc" data-i="${i}">Darwin Core CSV</button>
+      <button data-act="xlsx" data-i="${i}">Excel</button>
+      <button class="x" data-act="rm" data-i="${i}">Remove</button>
+    </div></details>`;
+}
+function render(){
+  $('#out').hidden=!blocks.length;
+  $('#total').textContent='('+blocks.filter(b=>!b.err).length+' loaded'+(blocks.some(b=>b.err)?', '+blocks.filter(b=>b.err).length+' failed':'')+')';
+  $('#blocks').innerHTML=blocks.map(blockHtml).join('');
+}
+
+/* ---------- exports ---------- */
+const good=bs=>bs.filter(b=>!b.err);
+function tableData(bs){
+  const set=new Set();good(bs).forEach(b=>b.cols.forEach(c=>set.add(c)));
+  const cols=[...PREF.filter(c=>set.has(c)),...[...set].filter(c=>!PREF.includes(c)).sort()];
+  const head=['Record','Section','Type',...cols.map(labelOf),'Pages','Page links'];
+  const body=[];
+  good(bs).forEach(b=>b.rows.forEach(r=>body.push([b.docId,r.sec,r.type,...cols.map(c=>r.f[c]||''),
+    r.pages.map(p=>p.order).join(' '),r.pages.map(p=>pageUrl(b,p.order)).join(' | ')])));
+  return {head,body};
+}
+const DWC_COLS=['eventID','parentEventID','eventDate','eventTime','year','month','day','locality','countryCode','recordedBy','datasetName','eventRemarks','dynamicProperties','associatedMedia','references'];
+function dwcRows(b){
+  const known=PREF;
+  const out=[{eventID:b.docId,datasetName:b.meta.title,eventDate:b.meta.year,year:b.meta.year,recordedBy:b.meta.by,
+    eventRemarks:b.meta.desc,countryCode:'LU',references:pageUrl(b,1)}];
+  b.rows.forEach(r=>{
+    const f=r.f,d=(f.DwCeventDate||'').match(/^(\d{4})-(\d\d)-(\d\d)$/),dp={};
+    if(f.eventTemperature)dp.temperatureCelsius=isNaN(+f.eventTemperature)?f.eventTemperature:+f.eventTemperature;
+    if(f.eventWeather)dp.weather=f.eventWeather;
+    Object.keys(f).filter(k=>!known.includes(k)).forEach(k=>dp[k]=f[k]);
+    out.push({eventID:b.docId+'_'+(r.sec!=='—'?r.sec:r.log),parentEventID:b.docId,
+      eventDate:f.DwCeventDate||'',eventTime:(f.DwCeventTime||'').replace(/\s*[-–]\s*/,'/'),
+      year:d?d[1]:'',month:d?+d[2]:'',day:d?+d[3]:'',locality:f.DwClocality||'',countryCode:'LU',
+      recordedBy:b.meta.by,datasetName:b.meta.title,dynamicProperties:Object.keys(dp).length?JSON.stringify(dp):'',
+      associatedMedia:r.pages.map(p=>pageUrl(b,p.order)).join(' | '),references:r.pages.length?pageUrl(b,r.pages[0].order):''});
+  });
+  return out;
+}
+function dwcData(bs){
+  const body=[];good(bs).forEach(b=>dwcRows(b).forEach(o=>body.push(DWC_COLS.map(c=>o[c]??''))));
+  return {head:DWC_COLS,body};
+}
+function save(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function saveCsv(name,{head,body}){
+  const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
+  save(name,new Blob(['\ufeff'+[head,...body].map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));
+}
+function exportFiles(act,bs,tag){
+  if(!good(bs).length)return;
+  if(act==='table')saveCsv(`mets-events-${tag}.csv`,tableData(bs));
+  else if(act==='dwc')saveCsv(`dwc-event-${tag}.csv`,dwcData(bs));
+  else if(act==='xlsx'){
+    if(typeof XLSX==='undefined'){$('#msg').className='err';$('#msg').textContent='Excel library could not be loaded (needs internet access to cdnjs.cloudflare.com).';return}
+    const wb=XLSX.utils.book_new();
+    [['Events',tableData(bs)],['DwC Event',dwcData(bs)]].forEach(([n,d])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([d.head,...d.body]),n));
+    XLSX.writeFile(wb,`mets-${tag}.xlsx`);
+  }
+}
+
+/* ---------- loading ---------- */
+const norm=l=>{l=l.trim();if(!l)return null;return /^https?:/i.test(l)?l:DEFAULT_BASE+'/viewer/sourcefile?id='+encodeURIComponent(l)};
+function addBlock(b){const i=blocks.findIndex(x=>x.src===b.src);if(i>=0)blocks[i]=b;else blocks.push(b)}
+async function loadAll(){
+  const urls=[...new Set($('#urls').value.split(/\n+/).map(norm).filter(Boolean))];
+  if(!urls.length)return;
+  const m=$('#msg');m.className='';m.textContent='Loading '+urls.length+' file(s)…';
+  const p=$('#proxy').value.trim();
+  const res=await Promise.all(urls.map(async u=>{
+    try{const r=await fetch(p?p+encodeURIComponent(u):u);if(!r.ok)throw new Error('HTTP '+r.status);return parse(await r.text(),u)}
+    catch(e){return {src:u,err:e.message+(e instanceof TypeError?' — likely blocked by CORS. Use a proxy (Options) or save the XML and open it as a file.':'')}}
+  }));
+  res.forEach(addBlock);m.textContent='';render();
+}
+$('#go').onclick=loadAll;
+$('#clear').onclick=()=>{blocks=[];$('#msg').textContent='';render()};
+$('#file').onchange=async e=>{
+  for(const f of e.target.files){
+    try{addBlock(parse(await f.text(),f.name))}catch(x){addBlock({src:f.name,err:x.message})}
+  }
+  e.target.value='';render();
+};
+$('#blocks').addEventListener('toggle',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!=null&&blocks[i])blocks[i].open=e.target.open},true);
+$('#out').addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  const act=t.dataset.act,i=t.dataset.i;
+  if(act==='open'||act==='close'){blocks.forEach(b=>b.open=act==='open');render();return}
+  if(act==='rm'){blocks.splice(+i,1);render();return}
+  const isAll=i==='all';
+  exportFiles(act,isAll?blocks:[blocks[+i]],isAll?'combined':(blocks[+i].docId||'export'));
+});
+const qp=new URLSearchParams(location.search).getAll('url');
+if(qp.length){$('#urls').value=qp.join('\n');loadAll()}
+</script>
+</body>
+</html>
