@@ -22,6 +22,15 @@ How it works
    dataset is re-fetched, removals are applied, additions are merged without
    duplicates (case-insensitive) and the tag list is written back with PUT.
 
+File uploader tab (second tab): add files or links to existing datasets.
+  * Pick one or more datasets from the loaded list, fill in path / type /
+    format / title / description and add the entry to the upload queue.
+  * Or import a CSV / Excel table (columns: dataset_id, operation_type
+    [file_upload | add_link], file_path, url, type, format, title,
+    description) - file names are resolved against the "Data folder".
+  * Review / edit the queue, then "Upload queue" sends everything (chunked
+    upload, 10 MB parts) and writes an output_report_<timestamp>.csv.
+
 Extras: dark / light theme, adjustable text size (A− / A+, Ctrl +/−/0),
 "Remove from list" (local only!), CSV import (ID|keyword, prefix a keyword
 with "-" to remove it). Theme, text size and organisation ID are remembered in
@@ -32,14 +41,20 @@ on Debian/Ubuntu: `sudo apt install python3-tk`).
 """
 
 import csv
+import io
 import json
+import logging
+import math
+import os
 import queue
 import re
 import threading
 import time
 import webbrowser
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 import tkinter as tk
@@ -143,6 +158,326 @@ def load_config():
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+# ----------------------------------------------------------------------------
+# File uploader: constants, helpers and upload engine
+# (ported from the standalone data_public_fileUploader_GUI.py)
+# ----------------------------------------------------------------------------
+SUPPORTED_TYPES = {
+    "main": "Fichier principal",
+    "documentation": "Documentation",
+    "update": "Mise à jour",
+    "api": "API",
+    "code": "Dépôt de code",
+    "other": "Autre",
+}
+
+SUPPORTED_FORMATS = {
+    "CSV": "text/csv",
+    "JSON": "application/json",
+    "GEOJSON": "application/geo+json",
+    "JPG": "image/jpeg",
+    "PNG": "image/png",
+    "HTML": "text/html",
+    "ZIP": "application/zip",
+    "OTHER": "application/octet-stream",
+    "URL": "url",
+}
+
+EXT_TO_FORMAT = {
+    ".csv": "CSV", ".json": "JSON", ".geojson": "GEOJSON", ".jpg": "JPG",
+    ".jpeg": "JPG", ".png": "PNG", ".html": "HTML", ".htm": "HTML", ".zip": "ZIP",
+}
+TYPE_DISPLAY = [f"{k} ({v})" for k, v in SUPPORTED_TYPES.items()]
+REQUIRED_COLUMNS = ["dataset_id", "operation_type"]
+TABLE_COLUMNS = ["dataset_id", "operation_type", "file_path", "url",
+                 "type", "format", "title", "description"]
+CHUNK_SIZE = 10 * 1024 * 1024  # 10 MB
+STATUS_TEXT = {"queued": "queued", "invalid": "⚠ invalid", "uploading": "⟳ uploading",
+               "done": "✔ done", "error": "✖ error"}
+
+
+def clean(value):
+    """Convert table values (CSV / Excel / pandas) into clean strings."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and value != value:  # NaN
+        return ""
+    return str(value).strip()
+
+
+def human_size(n):
+    size = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+
+
+def count_resources(ds):
+    """Number of files of a dataset, if the API response tells us."""
+    res = ds.get("resources")
+    if isinstance(res, list):
+        return len(res)
+    if isinstance(res, dict) and isinstance(res.get("total"), int):
+        return res["total"]
+    return ""
+
+
+def convert_type(value):
+    value = clean(value).lower()
+    if value.endswith(".0") and value[:-2].isdigit():  # Excel numbers
+        value = value[:-2]
+    if value in SUPPORTED_TYPES:
+        return value
+    numeric = {"0": "main", "1": "documentation", "2": "update",
+               "3": "api", "4": "code", "5": "other"}
+    french = {"fichier principal": "main", "documentation": "documentation",
+              "mise à jour": "update", "mise a jour": "update", "api": "api",
+              "dépôt de code": "code", "depot de code": "code", "autre": "other"}
+    if value in numeric:
+        return numeric[value]
+    if value in french:
+        return french[value]
+    raise ValueError(f"Invalid type '{value}'")
+
+
+def resolve_table_path(file_name, data_folder):
+    """File names from an input table are looked up in the Data folder
+    (only the file name is used, as in the original tool). An absolute path
+    that exists is used as it is."""
+    file_name = clean(file_name)
+    if not file_name:
+        return ""
+    candidate = Path(file_name)
+    if candidate.is_absolute() and candidate.is_file():
+        return str(candidate)
+    if data_folder:
+        return os.path.join(os.path.abspath(data_folder), os.path.basename(file_name))
+    return file_name
+
+
+def validate_op(item):
+    """Return an error message, or '' if the queue item is valid."""
+    if not clean(item.get("dataset_id")):
+        return "dataset_id is missing"
+    op = clean(item.get("operation"))
+    if op == "file_upload":
+        path = clean(item.get("file_path"))
+        if not path:
+            return "file_path is missing"
+        fp = Path(path)
+        if not fp.exists():
+            return f"File not found: {fp}"
+        if not fp.is_file():
+            return f"Not a file: {fp}"
+        try:
+            convert_type(item.get("type"))
+        except ValueError as exc:
+            return str(exc)
+        fmt = clean(item.get("format")).upper()
+        if fmt not in SUPPORTED_FORMATS:
+            return (f"Unsupported format '{fmt}' (allowed: "
+                    f"{', '.join(SUPPORTED_FORMATS)})")
+    elif op == "add_link":
+        if not clean(item.get("url")).startswith(("http://", "https://")):
+            return "URL is missing or invalid (must start with http:// or https://)"
+    else:
+        return f"Invalid operation_type '{op}' (use file_upload or add_link)"
+    return ""
+
+
+def read_input_table(path):
+    """Read a CSV / XLSX / XLS table and return a list of {column: text}."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Input file not found: {p}")
+    ext = p.suffix.lower()
+    if ext == ".csv":
+        text = p.read_text(encoding="utf-8-sig")
+        try:
+            dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;|\t")
+        except csv.Error:
+            dialect = csv.excel
+        reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+        headers = [(h or "").strip() for h in (reader.fieldnames or [])]
+        rows = [{(k or "").strip(): clean(v) for k, v in r.items()
+                 if k is not None and not isinstance(v, list)} for r in reader]
+    elif ext in (".xlsx", ".xls"):
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise RuntimeError("Reading Excel files needs pandas and openpyxl:\n"
+                               "    pip install pandas openpyxl") from exc
+        engine = "openpyxl" if ext == ".xlsx" else "xlrd"
+        df = pd.read_excel(p, engine=engine, keep_default_na=False)
+        df.columns = [str(c).strip() for c in df.columns]
+        headers = list(df.columns)
+        rows = [{c: clean(v) for c, v in rec.items()} for rec in df.to_dict("records")]
+    else:
+        raise ValueError("Unsupported input file type.\n\n"
+                         "Please select a CSV, XLSX, or XLS file.")
+    missing = [c for c in REQUIRED_COLUMNS if c not in headers]
+    if missing:
+        raise ValueError("The following required columns are missing:\n\n"
+                         + "\n".join(f"- {c}" for c in missing)
+                         + "\n\nExpected columns are:\n\n"
+                         + "\n".join(f"- {c}" for c in TABLE_COLUMNS))
+    return rows
+
+
+class ResourceUploader:
+    """Adds files / links to existing datasets (logic of the original tool)."""
+
+    def __init__(self, api_key, progress_callback=None):
+        self.session = requests.Session()
+        self.session.headers.update({"accept": "application/json", "X-API-KEY": api_key})
+        self.progress_callback = progress_callback
+
+    def _progress(self, current, total, message=""):
+        if self.progress_callback:
+            try:
+                self.progress_callback(current, total, message)
+            except Exception:  # noqa: BLE001 - never let the GUI break an upload
+                logging.exception("Progress callback failed")
+
+    @staticmethod
+    def _json(response):
+        try:
+            return response.json()
+        except ValueError:
+            return {"raw_response": response.text}
+
+    @staticmethod
+    def _resource_id(data):
+        if not isinstance(data, dict):
+            return None
+        if data.get("id"):
+            return data["id"]
+        resource = data.get("resource")
+        if isinstance(resource, dict) and resource.get("id"):
+            return resource["id"]
+        return None
+
+    def upload_file(self, row):
+        dataset_id = clean(row["dataset_id"])
+        file_path = Path(clean(row["file_path"]))
+        if not file_path.exists():
+            return {"status": "error", "error": f"File not found: {file_path}"}
+        if not file_path.is_file():
+            return {"status": "error", "error": f"Path is not a file: {file_path}"}
+
+        fmt = clean(row["format"]).upper()
+        mime_type = SUPPORTED_FORMATS.get(fmt, "application/octet-stream")
+        upload_url = f"{API_ENDPOINT}datasets/{dataset_id}/upload/"
+        file_size = os.path.getsize(file_path)
+        parts = max(1, math.ceil(file_size / CHUNK_SIZE))
+        upload_uuid = str(uuid4())
+        self._progress(0, parts, f"Starting upload: {file_path.name} "
+                                 f"({file_size:,} bytes, {parts} part(s))")
+        try:
+            last_response_data = None
+            with file_path.open("rb") as handle:
+                chunk_index = 0
+                chunk_offset = 0
+                while True:
+                    chunk_data = handle.read(CHUNK_SIZE)  # one chunk in memory at a time
+                    if not chunk_data:
+                        break
+                    chunk_size = len(chunk_data)
+                    self._progress(chunk_index, parts,
+                                   f"Uploading {file_path.name}: part {chunk_index + 1} of {parts}")
+                    data = {
+                        "partindex": str(chunk_index),
+                        "partbyteoffset": str(chunk_offset),
+                        "chunksize": str(chunk_size),
+                        "totalparts": str(parts),
+                        "size": str(file_size),
+                        "filename": file_path.name,
+                        "uuid": upload_uuid,
+                    }
+                    files = {"file": (file_path.name, chunk_data, mime_type)}
+                    response = self.session.post(upload_url, data=data, files=files,
+                                                 timeout=(30, 1800))
+                    if not response.ok:
+                        return {"status": "error", "code": response.status_code,
+                                "error": f"Chunk {chunk_index + 1} of {parts} failed with HTTP "
+                                         f"{response.status_code}:\n{response.text}"}
+                    last_response_data = self._json(response)
+                    chunk_index += 1
+                    chunk_offset += chunk_size
+                    self._progress(chunk_index, parts,
+                                   f"Uploaded {file_path.name}: part {chunk_index} of {parts}")
+                    if parts == 1:
+                        # Small files: the single request is the complete upload;
+                        # do NOT send a second POST to finalise it.
+                        break
+
+            resource_id = self._resource_id(last_response_data)
+
+            if parts > 1:
+                self._progress(parts, parts,
+                               f"All chunks uploaded for {file_path.name}. Finalizing...")
+                finalize = self.session.post(
+                    upload_url,
+                    data={"uuid": upload_uuid, "filename": file_path.name,
+                          "size": str(file_size), "totalparts": str(parts)},
+                    timeout=60)
+                if not finalize.ok:
+                    return {"status": "error", "code": finalize.status_code,
+                            "error": f"Upload finalization failed with HTTP "
+                                     f"{finalize.status_code}:\n{finalize.text}"}
+                last_response_data = self._json(finalize)
+                resource_id = self._resource_id(last_response_data)
+
+            if not resource_id:
+                return {"status": "error",
+                        "error": "The file upload request succeeded, but the API did not "
+                                 f"return a resource ID.\n\nAPI response:\n{last_response_data}"}
+
+            metadata = {"type": convert_type(row["type"]), "format": fmt}
+            if clean(row.get("title")):
+                metadata["title"] = clean(row["title"])
+            if clean(row.get("description")):
+                metadata["description"] = clean(row["description"])
+            update = self.session.put(
+                f"{API_ENDPOINT}datasets/{dataset_id}/resources/{resource_id}/",
+                json=metadata, timeout=60)
+            if not update.ok:
+                return {"status": "error", "resource_id": resource_id,
+                        "error": f"Metadata update failed with HTTP "
+                                 f"{update.status_code}:\n{update.text}"}
+            self._progress(parts, parts, f"Completed: {file_path.name}")
+            return {"status": "success", "resource_id": resource_id}
+
+        except requests.RequestException as exc:
+            logging.exception("HTTP error during file upload")
+            return {"status": "error", "error": f"HTTP/network error: {exc}"}
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("File upload failed")
+            return {"status": "error", "error": str(exc)}
+
+    def add_link(self, row):
+        dataset_id = clean(row["dataset_id"])
+        url_value = clean(row["url"])
+        if not url_value.startswith(("http://", "https://")):
+            return {"status": "error", "error": f"Invalid URL: {url_value}"}
+        payload = {"title": clean(row.get("title")), "description": clean(row.get("description")),
+                   "url": url_value, "type": "other", "filetype": "remote"}
+        try:
+            response = self.session.post(f"{API_ENDPOINT}datasets/{dataset_id}/resources/",
+                                         json=payload, timeout=60)
+            if not response.ok:
+                return {"status": "error", "code": response.status_code,
+                        "error": response.text}
+            return {"status": "success", "resource_id": response.json().get("id")}
+        except requests.RequestException as exc:
+            logging.exception("HTTP error while creating URL resource")
+            return {"status": "error", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("URL resource creation failed")
+            return {"status": "error", "error": str(exc)}
 
 
 # ----------------------------------------------------------------------------
@@ -268,7 +603,7 @@ class KeywordManager(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("data.public.lu – Keyword Manager")
-        self.geometry("1400x900")
+        self.geometry("1400x960")
         self.minsize(1100, 700)
 
         cfg = load_config()
@@ -283,6 +618,12 @@ class KeywordManager(tk.Tk):
         self.pending = {}    # id -> [keywords to add]
         self.removals = {}   # id -> [existing tags to remove]
         self.input_kws = []  # keyword bubbles typed by the user
+        self.queue = []      # file-uploader queue items
+        self._uid = 0
+        self.edit_uid = None
+        self.col_bases = []  # (treeview, {column: base width}) for font scaling
+        self._auto_title = True
+        self._auto_format = True
         self.sort_state = {"col": None, "reverse": False}
         self._last_checked = None
         self.busy = False
@@ -297,6 +638,14 @@ class KeywordManager(tk.Tk):
         self.kw_var = tk.StringVar()
         self.status = tk.StringVar(value="Enter your API key to get started.")
         self.show_key = tk.BooleanVar(value=False)
+        self.data_folder = tk.StringVar(value=cfg.get("data_folder") or "")
+        self.up_filter = tk.StringVar()
+        self.f_op = tk.StringVar(value="file_upload")
+        self.f_path = tk.StringVar()
+        self.f_url = tk.StringVar()
+        self.f_type = tk.StringVar(value=TYPE_DISPLAY[0])
+        self.f_format = tk.StringVar()
+        self.f_title = tk.StringVar()
 
         # fonts (resized together by apply_fonts)
         self.base_fonts = []
@@ -325,6 +674,7 @@ class KeywordManager(tk.Tk):
         self.filter_text.trace_add("write", lambda *_: self.refresh_tree())
         self.only_checked.trace_add("write", lambda *_: self.refresh_tree())
         self.only_staged.trace_add("write", lambda *_: self.refresh_tree())
+        self.up_filter.trace_add("write", lambda *_: self.refresh_up_tree())
         for seq, delta in (("<Control-plus>", 1), ("<Control-equal>", 1),
                            ("<Control-KP_Add>", 1), ("<Control-minus>", -1),
                            ("<Control-KP_Subtract>", -1)):
@@ -349,6 +699,9 @@ class KeywordManager(tk.Tk):
         ttk.Button(top, text="A" + MINUS, width=3,
                    command=lambda: self.change_font(-1)).pack(side="right", padx=4)
         ttk.Label(top, text="Text size:", style="Muted.TLabel").pack(side="right", padx=4)
+
+        ttk.Label(self, textvariable=self.status, style="Status.TLabel", anchor="w").pack(
+            fill="x", side="bottom")
 
         # --- connection ----------------------------------------------------
         conn = ttk.LabelFrame(self, text="1 · Connection")
@@ -379,9 +732,17 @@ class KeywordManager(tk.Tk):
                                       command=self.add_single_dataset)
         self.btn_add_one.grid(row=1, column=5, **pad)
 
-        # --- main split ----------------------------------------------------
-        main = ttk.PanedWindow(self, orient="horizontal")
-        main.pack(fill="both", expand=True, padx=10, pady=4)
+        # --- mode tabs -----------------------------------------------------
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=(4, 6))
+        self.tab_kw = ttk.Frame(self.notebook)
+        self.tab_up = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_kw, text="Keyword editor")
+        self.notebook.add(self.tab_up, text="File uploader")
+
+        # --- keyword editor: main split -------------------------------------
+        main = ttk.PanedWindow(self.tab_kw, orient="horizontal")
+        main.pack(fill="both", expand=True, padx=4, pady=4)
 
         left = ttk.LabelFrame(main, text="2 · Datasets  (tick the boxes of the ones to change)")
         main.add(left, weight=5)
@@ -409,6 +770,7 @@ class KeywordManager(tk.Tk):
         self.tree = ttk.Treeview(left, columns=cols, show="headings", selectmode="extended")
         self.col_base = {"check": 46, "title": 270, "id": 170, "tags": 250,
                          "pending": 150, "removal": 150}
+        self.col_bases.append((self.tree, self.col_base))
         titles = {"title": "Title", "id": "ID", "tags": "Existing tags",
                   "pending": "+ To add", "removal": MINUS + " To remove"}
         self.tree.heading("check", text=CHECK_OFF, command=self.toggle_all_visible)
@@ -491,8 +853,8 @@ class KeywordManager(tk.Tk):
         self.flows = [self.flow_tags, self.flow_input, self.flow_pop]
 
         # --- upload + log --------------------------------------------------
-        bottom = ttk.LabelFrame(self, text="4 · Upload")
-        bottom.pack(fill="both", padx=10, pady=(4, 4))
+        bottom = ttk.LabelFrame(self.tab_kw, text="4 · Upload keyword changes")
+        bottom.pack(fill="both", padx=4, pady=(4, 4))
         topline = ttk.Frame(bottom)
         topline.pack(fill="x", padx=4, pady=4)
         self.sum_ds = ttk.Label(topline, text="No staged changes.")
@@ -516,8 +878,7 @@ class KeywordManager(tk.Tk):
         self.log_box.pack(side="left", fill="both", expand=True)
         lsb.pack(side="right", fill="y")
 
-        ttk.Label(self, textvariable=self.status, style="Status.TLabel", anchor="w").pack(
-            fill="x", side="bottom")
+        self._build_upload_tab()
 
     # -------------------------------------------------- theme and font size
     def chip_colors(self, kind):
@@ -581,7 +942,38 @@ class KeywordManager(tk.Tk):
                      bordercolor=p["border"], lightcolor=p["field"], darkcolor=p["field"],
                      insertcolor=p["fg"], padding=3)
         st.map("TEntry", bordercolor=[("focus", p["accent"])],
-               lightcolor=[("focus", p["accent"])], darkcolor=[("focus", p["accent"])])
+               lightcolor=[("focus", p["accent"])], darkcolor=[("focus", p["accent"])],
+               fieldbackground=[("disabled", p["header"])],
+               foreground=[("disabled", p["muted"])])
+        st.configure("TCombobox", fieldbackground=p["field"], background=p["btn"],
+                     foreground=p["fg"], arrowcolor=p["fg"], bordercolor=p["border"],
+                     lightcolor=p["field"], darkcolor=p["field"], padding=3,
+                     selectbackground=p["field"], selectforeground=p["fg"])
+        st.map("TCombobox",
+               fieldbackground=[("disabled", p["header"]), ("readonly", p["field"])],
+               foreground=[("disabled", p["muted"])],
+               selectbackground=[("readonly", p["field"])],
+               selectforeground=[("readonly", p["fg"])],
+               bordercolor=[("focus", p["accent"])])
+        self.option_add("*TCombobox*Listbox.background", p["field"])
+        self.option_add("*TCombobox*Listbox.foreground", p["fg"])
+        self.option_add("*TCombobox*Listbox.selectBackground", p["sel_bg"])
+        self.option_add("*TCombobox*Listbox.selectForeground", p["sel_fg"])
+        st.configure("TRadiobutton", background=p["bg"], foreground=p["fg"],
+                     indicatorbackground=p["field"], indicatorforeground=p["fg"],
+                     indicatorcolor=p["field"])
+        st.map("TRadiobutton", background=[("active", p["bg"])],
+               indicatorcolor=[("selected", p["accent"])])
+        st.configure("TNotebook", background=p["bg"], bordercolor=p["border"],
+                     lightcolor=p["bg"], darkcolor=p["bg"], tabmargins=(0, 4, 0, 0))
+        st.configure("TNotebook.Tab", background=p["header"], foreground=p["muted"],
+                     padding=(22, 7), bordercolor=p["border"], lightcolor=p["header"],
+                     darkcolor=p["header"], font=self.bold_font)
+        st.map("TNotebook.Tab",
+               background=[("selected", p["accent"]), ("active", hover(p["header"]))],
+               foreground=[("selected", "#ffffff"), ("active", p["fg"])],
+               lightcolor=[("selected", p["accent"])],
+               darkcolor=[("selected", p["accent"])])
         st.configure("TCheckbutton", background=p["bg"], foreground=p["fg"],
                      indicatorbackground=p["field"], indicatorforeground=p["fg"],
                      indicatorcolor=p["field"])
@@ -611,9 +1003,13 @@ class KeywordManager(tk.Tk):
         self.tree.tag_configure("pending", background=p["add_bg"], foreground=p["add_fg"])
         self.tree.tag_configure("removal", background=p["rem_bg"], foreground=p["rem_fg"])
         self.tree.tag_configure("both", background=p["both_bg"], foreground=p["both_fg"])
-        self.log_box.configure(bg=p["field"], fg=p["fg"], insertbackground=p["fg"],
-                               highlightbackground=p["border"], highlightcolor=p["border"],
-                               selectbackground=p["sel_bg"], selectforeground=p["sel_fg"])
+        self.queue_tree.tag_configure("q_ok", background=p["add_bg"], foreground=p["add_fg"])
+        self.queue_tree.tag_configure("q_err", background=p["rem_bg"], foreground=p["rem_fg"])
+        self.queue_tree.tag_configure("q_busy", background=p["both_bg"], foreground=p["both_fg"])
+        for box in (self.log_box, self.ulog_box, self.f_desc):
+            box.configure(bg=p["field"], fg=p["fg"], insertbackground=p["fg"],
+                          highlightbackground=p["border"], highlightcolor=p["accent"],
+                          selectbackground=p["sel_bg"], selectforeground=p["sel_fg"])
         self.btn_theme.configure(text="Light mode" if dark else "Dark mode")
         for flow in self.flows:
             flow.redraw()
@@ -632,8 +1028,9 @@ class KeywordManager(tk.Tk):
             f.configure(size=max(size - 1, 7))
         base = tkfont.nametofont("TkDefaultFont")
         self.style.configure("Treeview", rowheight=base.metrics("linespace") + 10)
-        for col, width in self.col_base.items():
-            self.tree.column(col, width=int(width * size / 10))
+        for tree, bases in self.col_bases:
+            for col, width in bases.items():
+                tree.column(col, width=int(width * size / 10))
         for flow in self.flows:
             flow.apply_height()
             flow.redraw()
@@ -647,7 +1044,8 @@ class KeywordManager(tk.Tk):
         try:
             CONFIG_PATH.write_text(json.dumps({
                 "theme": self.theme, "font_size": self.font_size,
-                "org_id": self.org_id.get().strip()}), encoding="utf-8")
+                "org_id": self.org_id.get().strip(),
+                "data_folder": self.data_folder.get().strip()}), encoding="utf-8")
         except OSError:
             pass  # settings are a convenience, never fatal
 
@@ -686,7 +1084,8 @@ class KeywordManager(tk.Tk):
         def _apply():
             self.busy = busy
             state = "disabled" if busy else "normal"
-            for b in (self.btn_test, self.btn_load, self.btn_add_one, self.btn_upload):
+            for b in (self.btn_test, self.btn_load, self.btn_add_one, self.btn_upload,
+                      self.btn_queue_upload):
                 b.configure(state=state)
         self.ui(_apply)
 
@@ -908,6 +1307,7 @@ class KeywordManager(tk.Tk):
             "slug": ds.get("slug", ""),
             "tags": normalise_tags(ds.get("tags")),
             "page": ds.get("page", ""),
+            "n_resources": count_resources(ds),
         }
 
     def visible_ids(self):
@@ -986,6 +1386,7 @@ class KeywordManager(tk.Tk):
         chips = [{"text": f"{tag}  {n}", "kind": "suggest", "icon": "+", "key": tag}
                  for tag, n in counter.most_common(60)]
         self.flow_pop.set_chips(chips)
+        self.refresh_up_tree()  # keeps the uploader's dataset list in sync
 
     def sort_by(self, col):
         if self.sort_state["col"] == col:
@@ -1380,6 +1781,566 @@ class KeywordManager(tk.Tk):
             self.ui(apply)
 
         self.run_in_thread(work)
+
+    # ======================================================== FILE UPLOADER TAB
+    def _build_upload_tab(self):
+        tab = self.tab_up
+        pad = {"padx": 6, "pady": 3}
+
+        folder = ttk.Frame(tab)
+        folder.pack(fill="x", padx=6, pady=(8, 2))
+        folder.columnconfigure(1, weight=1)
+        ttk.Label(folder, text="Data folder (file names of imported tables are looked up here):"
+                  ).grid(row=0, column=0, sticky="w")
+        ttk.Entry(folder, textvariable=self.data_folder).grid(row=0, column=1, sticky="ew", padx=6)
+        ttk.Button(folder, text="Browse…", command=self.browse_data_folder).grid(row=0, column=2)
+
+        # bottom block is packed first so it always keeps its space
+        bottom = ttk.LabelFrame(tab, text="D · Upload")
+        bottom.pack(fill="x", side="bottom", padx=6, pady=(2, 6))
+        line = ttk.Frame(bottom)
+        line.pack(fill="x", padx=4, pady=4)
+        self.queue_summary = ttk.Label(line, text="Queue is empty.")
+        self.queue_summary.pack(side="left")
+        self.btn_queue_upload = ttk.Button(line, text="Upload queue", style="Accent.TButton",
+                                           command=self.upload_queue)
+        self.btn_queue_upload.pack(side="right")
+        self.up_progress = ttk.Progressbar(line, length=220, mode="determinate")
+        self.up_progress.pack(side="right", padx=10)
+        ulog_frame = ttk.Frame(bottom)
+        ulog_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+        self.ulog_box = tk.Text(ulog_frame, height=6, wrap="word", state="disabled",
+                                relief="flat", highlightthickness=1, bd=0)
+        usb = ttk.Scrollbar(ulog_frame, orient="vertical", command=self.ulog_box.yview)
+        self.ulog_box.configure(yscrollcommand=usb.set)
+        self.ulog_box.pack(side="left", fill="both", expand=True)
+        usb.pack(side="right", fill="y")
+
+        vpane = ttk.PanedWindow(tab, orient="vertical")
+        vpane.pack(fill="both", expand=True, padx=6, pady=4)
+        top = ttk.PanedWindow(vpane, orient="horizontal")
+        vpane.add(top, weight=3)
+
+        # --- A: dataset picker ---------------------------------------------
+        left = ttk.LabelFrame(top, text="A · Pick dataset(s)  (highlight one or more)")
+        top.add(left, weight=3)
+        bar = ttk.Frame(left)
+        bar.pack(fill="x", padx=4, pady=4)
+        ttk.Label(bar, text="Filter:").pack(side="left")
+        ttk.Entry(bar, textvariable=self.up_filter, width=26).pack(side="left", padx=4)
+        ttk.Button(bar, text="Select all shown",
+                   command=lambda: self.up_tree.selection_set(self.up_tree.get_children())
+                   ).pack(side="left", padx=4)
+        self.up_count = ttk.Label(bar, text="", style="Muted.TLabel")
+        self.up_count.pack(side="right")
+        self.up_tree = ttk.Treeview(left, columns=("title", "id", "res"), show="headings",
+                                    selectmode="extended", height=8)
+        up_base = {"title": 330, "id": 190, "res": 70}
+        for col, text in (("title", "Title"), ("id", "ID"), ("res", "Files")):
+            self.up_tree.heading(col, text=text)
+            self.up_tree.column(col, width=up_base[col], anchor="w")
+        uvsb = ttk.Scrollbar(left, orient="vertical", command=self.up_tree.yview)
+        self.up_tree.configure(yscrollcommand=uvsb.set)
+        uvsb.pack(side="right", fill="y")
+        self.up_tree.pack(fill="both", expand=True)
+        self.col_bases.append((self.up_tree, up_base))
+        self.up_tree.bind("<<TreeviewSelect>>", lambda _e: self.on_up_select())
+
+        # --- B: add a file / link ------------------------------------------
+        right = ttk.LabelFrame(top, text="B · Add a file or link to the queue")
+        top.add(right, weight=3)
+        right.columnconfigure(1, weight=1)
+        right.rowconfigure(7, weight=1)
+        self.up_sel_label = ttk.Label(right, text="", font=self.bold_font)
+        self.up_sel_label.grid(row=0, column=0, columnspan=2, sticky="w", **pad)
+        ops = ttk.Frame(right)
+        ops.grid(row=1, column=0, columnspan=2, sticky="w", **pad)
+        ttk.Radiobutton(ops, text="Upload a file", value="file_upload", variable=self.f_op,
+                        command=self.on_op_changed).pack(side="left")
+        ttk.Radiobutton(ops, text="Add a link (URL)", value="add_link", variable=self.f_op,
+                        command=self.on_op_changed).pack(side="left", padx=14)
+
+        ttk.Label(right, text="File path:").grid(row=2, column=0, sticky="w", **pad)
+        fp = ttk.Frame(right)
+        fp.grid(row=2, column=1, sticky="ew", **pad)
+        fp.columnconfigure(0, weight=1)
+        self.f_path_entry = ttk.Entry(fp, textvariable=self.f_path)
+        self.f_path_entry.grid(row=0, column=0, sticky="ew")
+        self.f_path_entry.bind("<FocusOut>", lambda _e: self.autofill_from_path())
+        self.f_path_entry.bind("<Return>", lambda _e: self.autofill_from_path())
+        self.btn_browse_file = ttk.Button(fp, text="Browse…", command=self.browse_upload_file)
+        self.btn_browse_file.grid(row=0, column=1, padx=(6, 0))
+
+        ttk.Label(right, text="URL:").grid(row=3, column=0, sticky="w", **pad)
+        self.f_url_entry = ttk.Entry(right, textvariable=self.f_url)
+        self.f_url_entry.grid(row=3, column=1, sticky="ew", **pad)
+
+        ttk.Label(right, text="Type:").grid(row=4, column=0, sticky="w", **pad)
+        self.f_type_combo = ttk.Combobox(right, textvariable=self.f_type, values=TYPE_DISPLAY,
+                                         state="readonly")
+        self.f_type_combo.grid(row=4, column=1, sticky="ew", **pad)
+
+        ttk.Label(right, text="Format:").grid(row=5, column=0, sticky="w", **pad)
+        self.f_format_combo = ttk.Combobox(right, textvariable=self.f_format,
+                                           values=list(SUPPORTED_FORMATS), state="readonly")
+        self.f_format_combo.grid(row=5, column=1, sticky="ew", **pad)
+        self.f_format_combo.bind("<<ComboboxSelected>>",
+                                 lambda _e: setattr(self, "_auto_format", False))
+
+        ttk.Label(right, text="Title:").grid(row=6, column=0, sticky="w", **pad)
+        self.f_title_entry = ttk.Entry(right, textvariable=self.f_title)
+        self.f_title_entry.grid(row=6, column=1, sticky="ew", **pad)
+        self.f_title_entry.bind("<KeyRelease>", self._on_title_key)
+
+        ttk.Label(right, text="Description:").grid(row=7, column=0, sticky="nw", **pad)
+        self.f_desc = tk.Text(right, height=4, wrap="word", font="TkDefaultFont",
+                              relief="flat", highlightthickness=1, bd=0)
+        self.f_desc.grid(row=7, column=1, sticky="nsew", **pad)
+
+        btns = ttk.Frame(right)
+        btns.grid(row=8, column=0, columnspan=2, sticky="ew", **pad)
+        self.btn_add_queue = ttk.Button(btns, text="+  Add to queue", style="Add.TButton",
+                                        command=self.add_to_queue)
+        self.btn_add_queue.pack(side="left")
+        ttk.Button(btns, text="Clear form", command=self.clear_form).pack(side="left", padx=8)
+        self.edit_label = ttk.Label(right, text="", style="Muted.TLabel")
+        self.edit_label.grid(row=9, column=0, columnspan=2, sticky="w", **pad)
+
+        # --- C: queue ------------------------------------------------------
+        qf = ttk.LabelFrame(vpane, text="C · Upload queue  (double-click a row to edit it)")
+        vpane.add(qf, weight=3)
+        qbar = ttk.Frame(qf)
+        qbar.pack(fill="x", padx=4, pady=4)
+        ttk.Button(qbar, text="Import table (CSV / Excel)…", command=self.import_table
+                   ).pack(side="left")
+        ttk.Button(qbar, text="Save template…", command=self.save_template
+                   ).pack(side="left", padx=6)
+        ttk.Button(qbar, text="Clear queue", command=self.clear_queue).pack(side="right")
+        ttk.Button(qbar, text="Remove finished", command=self.remove_finished
+                   ).pack(side="right", padx=6)
+        ttk.Button(qbar, text="Remove selected", command=self.remove_selected_queue
+                   ).pack(side="right")
+        qcols = ("status", "dataset", "operation", "target", "type", "format", "title", "message")
+        self.queue_tree = ttk.Treeview(qf, columns=qcols, show="headings",
+                                       selectmode="extended", height=6)
+        q_base = {"status": 100, "dataset": 220, "operation": 70, "target": 330,
+                  "type": 100, "format": 70, "title": 170, "message": 260}
+        q_head = {"status": "Status", "dataset": "Dataset", "operation": "Action",
+                  "target": "File / URL", "type": "Type", "format": "Format",
+                  "title": "Title", "message": "Info"}
+        for col in qcols:
+            self.queue_tree.heading(col, text=q_head[col])
+            self.queue_tree.column(col, width=q_base[col], anchor="w")
+        qvsb = ttk.Scrollbar(qf, orient="vertical", command=self.queue_tree.yview)
+        qhsb = ttk.Scrollbar(qf, orient="horizontal", command=self.queue_tree.xview)
+        self.queue_tree.configure(yscrollcommand=qvsb.set, xscrollcommand=qhsb.set)
+        qhsb.pack(side="bottom", fill="x")
+        qvsb.pack(side="right", fill="y")
+        self.queue_tree.pack(fill="both", expand=True)
+        self.col_bases.append((self.queue_tree, q_base))
+        self.queue_tree.bind("<Double-1>", self.on_queue_double_click)
+        self.queue_tree.bind("<Delete>", lambda _e: self.remove_selected_queue())
+
+        self.on_op_changed()
+        self.on_up_select()
+
+    # ------------------------------------------------------------- helpers
+    def ulog(self, message):
+        def _write():
+            self.ulog_box.configure(state="normal")
+            self.ulog_box.insert("end", message + "\n")
+            self.ulog_box.see("end")
+            self.ulog_box.configure(state="disabled")
+        self.ui(_write)
+
+    def browse_data_folder(self):
+        folder = filedialog.askdirectory(title="Select data folder")
+        if folder:
+            self.data_folder.set(os.path.normpath(folder))
+            self.save_config()
+
+    def refresh_up_tree(self):
+        if not hasattr(self, "up_tree"):
+            return
+        selected = set(self.up_tree.selection())
+        self.up_tree.delete(*self.up_tree.get_children())
+        needle = self.up_filter.get().strip().casefold()
+        shown = 0
+        for ds_id in self.order:
+            ds = self.datasets[ds_id]
+            if needle and needle not in f"{ds['title']} {ds_id}".casefold():
+                continue
+            self.up_tree.insert("", "end", iid=ds_id,
+                                values=(ds["title"], ds_id, ds.get("n_resources", "")))
+            shown += 1
+        keep = [i for i in selected if self.up_tree.exists(i)]
+        if keep:
+            self.up_tree.selection_set(keep)
+        self.up_count.configure(text=f"{shown} shown · {len(self.order)} loaded")
+        self.on_up_select()
+
+    def up_selected_ids(self):
+        return [i for i in self.up_tree.selection() if i in self.datasets]
+
+    def on_up_select(self):
+        ids = self.up_selected_ids()
+        if not ids:
+            text = "No dataset selected – pick one in list A"
+        elif len(ids) == 1:
+            ds = self.datasets[ids[0]]
+            text = f"Dataset: {ds['title'] or ids[0]}"
+        else:
+            text = f"{len(ids)} datasets selected – the entry is added to each"
+        self.up_sel_label.configure(text=text)
+
+    # ---------------------------------------------------------------- form
+    def on_op_changed(self):
+        file_mode = self.f_op.get() == "file_upload"
+        self.f_path_entry.configure(state="normal" if file_mode else "disabled")
+        self.btn_browse_file.configure(state="normal" if file_mode else "disabled")
+        self.f_url_entry.configure(state="disabled" if file_mode else "normal")
+        self.f_type_combo.configure(state="readonly" if file_mode else "disabled")
+        self.f_format_combo.configure(state="readonly" if file_mode else "disabled")
+
+    def _on_title_key(self, event):
+        if event.keysym not in ("Tab", "ISO_Left_Tab", "Shift_L", "Shift_R"):
+            self._auto_title = False
+
+    def browse_upload_file(self):
+        path = filedialog.askopenfilename(title="Select the file to upload")
+        if path:
+            self.f_path.set(os.path.normpath(path))
+            self.autofill_from_path()
+
+    def autofill_from_path(self):
+        raw = self.f_path.get().strip().strip('"')  # tolerate "Copy as path"
+        if raw != self.f_path.get():
+            self.f_path.set(raw)
+        if not raw:
+            return
+        fp = Path(raw)
+        if self._auto_format or not self.f_format.get():
+            self.f_format.set(EXT_TO_FORMAT.get(fp.suffix.lower(), "OTHER"))
+            self._auto_format = True
+        if (self._auto_title or not self.f_title.get().strip()) and fp.stem:
+            self.f_title.set(fp.stem)
+            self._auto_title = True
+
+    def clear_form(self):
+        self.f_op.set("file_upload")
+        for var in (self.f_path, self.f_url, self.f_format, self.f_title):
+            var.set("")
+        self.f_type.set(TYPE_DISPLAY[0])
+        self.f_desc.delete("1.0", "end")
+        self._auto_title = self._auto_format = True
+        self.edit_uid = None
+        self.btn_add_queue.configure(text="+  Add to queue")
+        self.edit_label.configure(text="")
+        self.on_op_changed()
+
+    def collect_form(self):
+        op = self.f_op.get()
+        item = {"operation": op, "file_path": "", "url": "", "type": "", "format": "",
+                "title": self.f_title.get().strip(),
+                "description": self.f_desc.get("1.0", "end").strip()}
+        if op == "file_upload":
+            item["file_path"] = self.f_path.get().strip().strip('"')
+            item["type"] = self.f_type.get().split(" ")[0]
+            item["format"] = self.f_format.get().strip().upper()
+        else:
+            item["url"] = self.f_url.get().strip()
+            item["type"] = "other"
+        return item
+
+    # --------------------------------------------------------------- queue
+    def _new_item(self, ds_id, base):
+        self._uid += 1
+        item = dict(base)
+        item.update({"uid": self._uid, "dataset_id": ds_id,
+                     "dataset_title": self.datasets.get(ds_id, {}).get("title", ""),
+                     "status": "queued", "message": ""})
+        return item
+
+    def _check_item(self, item):
+        err = validate_op(item)
+        if err:
+            item["status"], item["message"] = "invalid", err
+            return
+        item["status"], item["message"] = "queued", ""
+        if item["operation"] == "file_upload":
+            item["type"] = convert_type(item["type"])
+            item["format"] = clean(item["format"]).upper()
+            size = os.path.getsize(item["file_path"])
+            item["message"] = f"{human_size(size)} · {max(1, math.ceil(size / CHUNK_SIZE))} part(s)"
+
+    def add_to_queue(self):
+        base = self.collect_form()
+        if self.edit_uid is not None:  # saving an edited row
+            item = next((it for it in self.queue if it["uid"] == self.edit_uid), None)
+            if item:
+                item.update(base)
+                self._check_item(item)
+                if item["status"] == "invalid":
+                    messagebox.showwarning("Row saved but invalid", item["message"])
+            self.clear_form()
+            self.refresh_queue()
+            return
+        ids = self.up_selected_ids()
+        if not ids:
+            messagebox.showinfo("No dataset", "Select one or more datasets in list A first.")
+            return
+        probe = dict(base, dataset_id=ids[0])
+        err = validate_op(probe)
+        if err:
+            messagebox.showwarning("Check the form", err)
+            return
+        for ds_id in ids:
+            item = self._new_item(ds_id, base)
+            self._check_item(item)
+            self.queue.append(item)
+        self.refresh_queue()
+        self.set_status(f"Added to the queue for {len(ids)} dataset(s). "
+                        f"Nothing uploaded yet – press \"Upload queue\".")
+        self.clear_form()
+
+    def on_queue_double_click(self, event):
+        row = self.queue_tree.identify_row(event.y)
+        item = next((it for it in self.queue if str(it["uid"]) == row), None)
+        if not item or item["status"] in ("done", "uploading"):
+            return
+        self.edit_uid = item["uid"]
+        self.f_op.set(item["operation"])
+        self.f_path.set(item["file_path"])
+        self.f_url.set(item["url"])
+        self.f_type.set(next((d for d in TYPE_DISPLAY if d.split(" ")[0] == item["type"]),
+                             TYPE_DISPLAY[0]))
+        self.f_format.set(item["format"])
+        self.f_title.set(item["title"])
+        self.f_desc.delete("1.0", "end")
+        self.f_desc.insert("1.0", item["description"])
+        self._auto_title = self._auto_format = False
+        self.on_op_changed()
+        self.btn_add_queue.configure(text="Save changes to row")
+        self.edit_label.configure(
+            text=f"Editing a queue row (dataset {item['dataset_title'] or item['dataset_id']}). "
+                 f"\"Clear form\" cancels.")
+
+    def refresh_queue(self):
+        selected = set(self.queue_tree.selection())
+        self.queue_tree.delete(*self.queue_tree.get_children())
+        tags = {"done": "q_ok", "error": "q_err", "invalid": "q_err", "uploading": "q_busy"}
+        for it in self.queue:
+            is_file = it["operation"] == "file_upload"
+            self.queue_tree.insert(
+                "", "end", iid=str(it["uid"]),
+                values=(STATUS_TEXT.get(it["status"], it["status"]),
+                        it["dataset_title"] or it["dataset_id"],
+                        "file" if is_file else "link",
+                        it["file_path"] if is_file else it["url"],
+                        it["type"] if is_file else "", it["format"] if is_file else "",
+                        it["title"], it["message"]),
+                tags=(tags[it["status"]],) if it["status"] in tags else ())
+        keep = [i for i in selected if self.queue_tree.exists(i)]
+        if keep:
+            self.queue_tree.selection_set(keep)
+        counts = Counter(it["status"] for it in self.queue)
+        if not self.queue:
+            self.queue_summary.configure(text="Queue is empty.")
+        else:
+            self.queue_summary.configure(
+                text=f"{len(self.queue)} row(s): {counts['queued']} ready, "
+                     f"{counts['done']} done, {counts['error']} failed, "
+                     f"{counts['invalid']} invalid")
+
+    def _queue_guard(self):
+        if self.busy:
+            messagebox.showinfo("Busy", "Wait until the running upload has finished.")
+            return False
+        return True
+
+    def remove_selected_queue(self):
+        if not self._queue_guard():
+            return
+        uids = {int(i) for i in self.queue_tree.selection()}
+        self.queue = [it for it in self.queue if it["uid"] not in uids]
+        self.refresh_queue()
+
+    def remove_finished(self):
+        if self._queue_guard():
+            self.queue = [it for it in self.queue if it["status"] != "done"]
+            self.refresh_queue()
+
+    def clear_queue(self):
+        if self._queue_guard() and self.queue and messagebox.askyesno(
+                "Clear queue", "Remove all rows from the upload queue?\n\n"
+                               "(Nothing is deleted on data.public.lu.)"):
+            self.queue = []
+            self.refresh_queue()
+
+    # --------------------------------------------------- table import / export
+    def import_table(self):
+        path = filedialog.askopenfilename(
+            title="Select input table",
+            filetypes=[("CSV and Excel files", "*.csv *.xlsx *.xls"),
+                       ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            rows = read_input_table(path)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Cannot read table", str(exc))
+            return
+        folder = self.data_folder.get().strip()
+        added = invalid = 0
+        for r in rows:
+            op = clean(r.get("operation_type"))
+            base = {
+                "operation": op,
+                "file_path": (resolve_table_path(r.get("file_path"), folder)
+                              if op == "file_upload" else clean(r.get("file_path"))),
+                "url": clean(r.get("url")),
+                "type": clean(r.get("type")) if op == "file_upload" else "other",
+                "format": clean(r.get("format")).upper(),
+                "title": clean(r.get("title")),
+                "description": clean(r.get("description")),
+            }
+            item = self._new_item(clean(r.get("dataset_id")), base)
+            self._check_item(item)
+            self.queue.append(item)
+            added += 1
+            invalid += item["status"] == "invalid"
+        self.refresh_queue()
+        msg = f"Imported {added} row(s) from {Path(path).name}"
+        if invalid:
+            msg += f" – {invalid} invalid (see the Info column; double-click a row to fix it)"
+        self.ulog(msg)
+        self.set_status(msg)
+
+    def save_template(self):
+        path = filedialog.asksaveasfilename(
+            title="Save template", defaultextension=".csv", initialfile="upload_template.csv",
+            filetypes=[("CSV", "*.csv")])
+        if not path:
+            return
+        examples = [
+            ["<dataset id>", "file_upload", "my_data.csv", "", "main", "CSV",
+             "My data (2026)", "Short description"],
+            ["<dataset id>", "add_link", "", "https://example.org/page", "", "",
+             "Project website", "Link to the project"],
+        ]
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(TABLE_COLUMNS)
+                writer.writerows(examples)
+        except OSError as exc:
+            messagebox.showerror("Cannot save", str(exc))
+
+    # -------------------------------------------------------------- upload
+    def upload_queue(self):
+        if self.busy:
+            messagebox.showinfo("Busy", "Another operation is still running.")
+            return
+        if not self.require_key():
+            return
+        todo = [it for it in self.queue if it["status"] in ("queued", "error", "invalid")]
+        for it in todo:  # re-check: files may have changed since they were queued
+            self._check_item(it)
+        self.refresh_queue()
+        items = [it for it in todo if it["status"] == "queued"]
+        invalid = [it for it in todo if it["status"] == "invalid"]
+        if not items:
+            messagebox.showinfo("Nothing to upload",
+                                "The queue has no valid rows to upload."
+                                + (f"\n\nFirst problem: {invalid[0]['message']}" if invalid else ""))
+            return
+        files = [it for it in items if it["operation"] == "file_upload"]
+        total = sum(os.path.getsize(it["file_path"]) for it in files)
+        msg = (f"Upload to data.public.lu?\n\n"
+               f"  {len(files)} file(s), {human_size(total)}\n"
+               f"  {len(items) - len(files)} link(s)\n"
+               f"  {len({it['dataset_id'] for it in items})} dataset(s)")
+        if invalid:
+            msg += f"\n\n{len(invalid)} invalid row(s) will be skipped."
+        if not messagebox.askyesno("Confirm upload", msg):
+            return
+        key = self.api_key.get().strip()
+        n = len(items)
+        state = {"idx": 0}
+        self.up_progress.configure(value=0)
+
+        def cb(current, total_parts, message):
+            frac = (state["idx"] + (current / total_parts if total_parts else 1)) / n
+            self.ui(lambda f=frac: self.up_progress.configure(value=min(f, 1) * 100))
+            self.ulog(message)
+
+        def work():
+            uploader = ResourceUploader(key, progress_callback=cb)
+            report, ok, failed = [], 0, 0
+            for idx, item in enumerate(items):
+                state["idx"] = idx
+                self.ui(lambda it=item: self._set_item_state(it, "uploading", ""))
+                self.set_status(f"Uploading {idx + 1}/{n}…")
+                self.ulog(f"[{idx + 1}/{n}] {item['operation']} -> dataset {item['dataset_id']}")
+                if item["operation"] == "file_upload":
+                    result = uploader.upload_file(item)
+                else:
+                    result = uploader.add_link(item)
+                self.ui(lambda it=item, res=result: self._apply_result(it, res))
+                if result.get("status") == "success":
+                    ok += 1
+                    self.ulog(f"    OK – resource {result.get('resource_id', '')}")
+                else:
+                    failed += 1
+                    self.ulog(f"    FAILED – {str(result.get('error', ''))[:400]}")
+                report.append({
+                    "dataset_id": item["dataset_id"], "operation": item["operation"],
+                    "status": result.get("status"), "resource_id": result.get("resource_id", ""),
+                    "error": result.get("error", ""),
+                    "file_or_url": item["file_path"] or item["url"], "title": item["title"]})
+                self.ui(lambda v=(idx + 1) / n * 100: self.up_progress.configure(value=v))
+            report_path = self.write_report(report)
+            summary = f"Upload finished – succeeded: {ok}, failed: {failed}"
+            self.ulog(summary + (f"\nReport: {report_path}" if report_path else ""))
+            self.set_status(summary)
+            self.ui(lambda: messagebox.showinfo(
+                "Upload finished",
+                summary + (f"\n\nReport:\n{report_path}" if report_path else "")))
+
+        self.run_in_thread(work)
+
+    def _set_item_state(self, item, status, message):
+        item["status"], item["message"] = status, message
+        self.refresh_queue()
+
+    def _apply_result(self, item, result):
+        if result.get("status") == "success":
+            item["status"] = "done"
+            item["message"] = f"resource {result.get('resource_id', '')}"
+            ds = self.datasets.get(item["dataset_id"])
+            if ds and isinstance(ds.get("n_resources"), int):
+                ds["n_resources"] += 1
+        else:
+            item["status"] = "error"
+            item["message"] = str(result.get("error", "")).replace("\n", " ")[:300]
+        self.refresh_queue()
+        self.refresh_up_tree()
+
+    def write_report(self, rows):
+        folder = self.data_folder.get().strip()
+        base = Path(folder) if folder and os.path.isdir(folder) else Path.home()
+        path = base / f"output_report_{datetime.now():%Y%m%d_%H%M%S}.csv"
+        fields = ["dataset_id", "operation", "status", "resource_id", "error",
+                  "file_or_url", "title"]
+        try:
+            with path.open("w", newline="", encoding="utf-8-sig") as fh:
+                writer = csv.DictWriter(fh, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(rows)
+            return str(path)
+        except OSError as exc:
+            self.ulog(f"Could not write report: {exc}")
+            return ""
 
 
 if __name__ == "__main__":
