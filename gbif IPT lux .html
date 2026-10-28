@@ -4,345 +4,1342 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GBIF ↔ IPT Dataset Monitor</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌿</text></svg>">
     <style>
+        :root {
+            --bg: #f2f5f3;
+            --card: #ffffff;
+            --ink: #1c2b23;
+            --muted: #6b7c72;
+            --line: #e3e9e5;
+            --green: #2e7d4f;
+            --green-dark: #215c3a;
+            --green-soft: #e7f6ed;
+            --blue: #1f6fb2;
+            --blue-soft: #e7f1fb;
+            --purple-soft: #f0ebfa;
+            --gray-soft: #eef1ef;
+            --amber: #b8860b;
+            --amber-soft: #fff6dc;
+            --orange: #c2661a;
+            --orange-soft: #fdeedd;
+            --red: #b23a3a;
+            --red-soft: #fbe9e9;
+            --shadow: 0 1px 3px rgba(28, 43, 35, .08), 0 8px 24px rgba(28, 43, 35, .06);
+        }
+        * { box-sizing: border-box; }
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-size: 14px;
+        }
+        header {
+            background: linear-gradient(135deg, #16382a 0%, #2e7d4f 100%);
+            color: #fff;
+            padding: 22px 24px 18px;
+        }
+        header .wrap, .page {
+            max-width: 1400px;
+            margin: 0 auto;
         }
         h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 650;
+            letter-spacing: .2px;
+        }
+        header .sub {
+            margin-top: 4px;
+            font-size: 13px;
+            opacity: .85;
+        }
+        .page { padding: 16px 24px 40px; }
+
+        /* summary chips */
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .chip {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 13px;
+            box-shadow: var(--shadow);
+        }
+        .chip b { font-weight: 650; }
+        .chip.warn { border-color: #f0c7a1; background: #fff8ef; }
+
+        /* toolbar */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px 12px;
+            box-shadow: var(--shadow);
+            margin-bottom: 14px;
+        }
+        .toolbar input[type="search"], .toolbar select {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 7px 10px;
+            font-size: 13px;
+            background: #fbfdfc;
+            color: var(--ink);
+            outline: none;
+        }
+        .toolbar input[type="search"] { flex: 1 1 220px; min-width: 160px; }
+        .toolbar input[type="search"]:focus, .toolbar select:focus { border-color: var(--green); }
+        .toolbar .spacer { flex: 1; }
+        .toolbar .meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        button:disabled { opacity: .55; cursor: default; }
+        #refresh-btn { background: var(--green); color: #fff; }
+        #refresh-btn:hover:not(:disabled) { background: var(--green-dark); }
+        #download-btn { background: #fff; color: var(--green); border: 1px solid var(--green); }
+        #download-btn:hover { background: var(--green-soft); }
+
+        /* progress + status */
+        #progress {
+            height: 3px;
+            background: transparent;
+            border-radius: 2px;
+            overflow: hidden;
             margin-bottom: 10px;
         }
+        #progress .bar {
+            height: 100%;
+            width: 0;
+            background: var(--green);
+            transition: width .3s ease;
+        }
+        #status { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+        #error {
+            display: none;
+            background: var(--red-soft);
+            border: 1px solid #efc3c3;
+            color: var(--red);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 14px;
+            align-items: center;
+            gap: 12px;
+        }
+        #error button { background: var(--red); color: #fff; }
+
+        /* table */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .table-wrap { overflow-x: auto; }
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
         }
         th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
+            padding: 8px 10px;
+            text-align: left;
             vertical-align: top;
+            white-space: nowrap;
         }
         th {
-            background: #f3f3f3;
+            position: sticky;
+            top: 0;
+            background: #f7faf8;
+            border-bottom: 2px solid var(--line);
             cursor: pointer;
             user-select: none;
-        }
-        th:hover {
-            background: #eaeaea;
-        }
-        .green { background: #e7ffe7; }
-        .yellow { background: #fff9d6; }
-        .orange { background: #ffe8cc; }
-        .red { background: #ffe5e5; }
-        .small {
             font-size: 12px;
-            color: #666;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            color: #4a5d52;
+            z-index: 2;
         }
-        #download-btn {
-            margin-bottom: 10px;
-            padding: 8px 16px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        #download-btn:hover {
-            background: #45a049;
-        }
-        .tooltip {
-            position: relative;
+        th:hover { background: #eef4f0; }
+        th .arrow { font-size: 10px; margin-left: 3px; }
+        tbody tr { border-bottom: 1px solid var(--line); }
+        tbody tr:hover { background: #f6faf7; }
+        td.num { font-variant-numeric: tabular-nums; text-align: right; }
+        td .title-cell { white-space: normal; min-width: 240px; max-width: 420px; font-weight: 600; }
+        td a { color: var(--blue); text-decoration: none; }
+        td a:hover { text-decoration: underline; }
+        td .links a {
             display: inline-block;
-        }
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 200px;
-            background-color: #555;
-            color: #fff;
-            text-align: center;
+            margin-right: 6px;
+            padding: 2px 8px;
+            border: 1px solid var(--line);
             border-radius: 6px;
-            padding: 5px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -100px;
-            opacity: 0;
-            transition: opacity 0.3s;
+            font-size: 12px;
         }
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
+        td .links a:hover { background: var(--gray-soft); text-decoration: none; }
+        /* DwC-A styled as a download button */
+        td .links a.dwca {
+            background: var(--green-soft);
+            border: 1px solid var(--green);
+            color: var(--green);
+            font-weight: 650;
+        }
+        td .links a.dwca:hover { background: var(--green); color: #fff; }
+        .badge.pub { background: var(--gray-soft); color: #4a5d52; }
+        .colhidden { display: none; }
+
+        /* popups (column visibility + type filter) */
+        .popup {
+            position: absolute;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            box-shadow: 0 10px 32px rgba(28, 43, 35, .18);
+            padding: 8px;
+            z-index: 50;
+            display: none;
+            min-width: 170px;
+            max-height: 70vh;
+            overflow-y: auto;
+            font-size: 13px;
+        }
+        .popup.open { display: block; }
+        .popup .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .popup .menu-item:hover { background: #eef4f0; }
+        .popup .menu-item.active { background: var(--green-soft); font-weight: 650; }
+        .popup .menu-item .count { color: var(--muted); font-size: 12px; margin-left: auto; padding-left: 14px; }
+        .popup input[type="checkbox"] { accent-color: var(--green); }
+        .popup .menu-sep { border-top: 1px solid var(--line); margin: 6px 4px; }
+
+        .pending { color: #b9c4bd; font-style: italic; }
+        .badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: .3px;
+        }
+        .badge.occ { background: var(--green-soft); color: var(--green); }
+        .badge.chk { background: var(--blue-soft); color: var(--blue); }
+        .badge.evt { background: var(--purple-soft); color: #6a45b0; }
+        .badge.camtrap { background: #fdeef8; color: #a3368f; }
+        .badge.meta, .badge.other { background: var(--gray-soft); color: var(--muted); }
+
+        /* country panel */
+        .country-panel { padding: 16px 18px 14px; margin-bottom: 14px; }
+        .country-panel h2 { margin: 0 0 4px; font-size: 16px; }
+        .country-panel h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: #4a5d52; }
+        .country-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+        .country-head .small-links a { color: var(--blue); text-decoration: none; font-size: 12px; }
+        .country-head .small-links a:hover { text-decoration: underline; }
+        .country-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .stat {
+            flex: 1 1 140px;
+            background: #f7faf8;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px 14px;
+        }
+        .stat .n { display: block; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+        .stat .l { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .pub-table th { position: static; }
+        .pub-table td, .pub-table th { padding: 6px 10px; }
+        .pub-table td.num, .pub-table th.num { text-align: right; }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .pill.synced { background: var(--green-soft); color: var(--green); }
+        .pill.lagging { background: var(--amber-soft); color: var(--amber); }
+        .pill.ahead { background: var(--orange-soft); color: var(--orange); }
+        .pill.stale { background: var(--red-soft); color: var(--red); }
+        .pill.unknown { background: var(--gray-soft); color: var(--muted); }
+
+        td.p-green { background: var(--green-soft); }
+        td.p-yellow { background: var(--amber-soft); }
+        td.p-orange { background: var(--orange-soft); }
+        td.p-red { background: var(--red-soft); }
+        .lic-ok { color: var(--green); font-weight: 600; }
+        .lic-mid { color: var(--amber); }
+        .lic-warn { color: var(--red); font-weight: 600; }
+
+        .footer-note {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+        @media (max-width: 700px) {
+            .page { padding: 12px 10px 30px; }
+            header { padding: 16px 12px 14px; }
+            .toolbar .meta { display: none; }
         }
     </style>
 </head>
 <body>
-    <h1>GBIF ↔ IPT Dataset Monitor</h1>
-    <button id="download-btn">Download CSV</button>
-    <div id="status">Loading...</div>
-    <div class="small">
-        <strong>Archive Type Legend:</strong>
-        <span class="tooltip">OCCURRENCE
-            <span class="tooltiptext">Occurrence data: Records of species observations or specimens.</span>
-        </span>,
-        <span class="tooltip">CHECKLIST
-            <span class="tooltiptext">Checklist data: Lists of species in a specific area or context.</span>
-        </span>,
-        <span class="tooltip">EVENT
-            <span class="tooltiptext">Event data: Records of sampling events or surveys.</span>
-        </span>
+    <header>
+        <div class="wrap">
+            <h1>GBIF ↔ IPT Dataset Monitor</h1>
+            <div class="sub">Datasets hosted on the MNHNL IPT (all publishing organizations) — GBIF registry vs. IPT publication status</div>
+        </div>
+    </header>
+    <div class="page">
+        <div class="chips" id="chips"></div>
+
+        <div class="card country-panel">
+            <div class="country-head">
+                <h2>Luxembourg on GBIF</h2>
+                <span class="small-links">
+                    <a target="_blank" rel="noopener noreferrer" href="https://www.gbif.org/country/LU/summary">Country summary</a> ·
+                    <a target="_blank" rel="noopener noreferrer" href="https://www.gbif.org/publisher/search?country=LU">Publishers from Luxembourg</a>
+                </span>
+            </div>
+            <div class="country-stats" id="country-stats"></div>
+            <h3>Publishers from Luxembourg</h3>
+            <div class="table-wrap">
+                <table class="pub-table">
+                    <thead>
+                        <tr>
+                            <th>Publisher</th>
+                            <th>Datasets</th>
+                            <th>Types</th>
+                            <th>Occurrence records</th>
+                            <th>Checklist taxa</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pub-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <input type="search" id="search" placeholder="Filter datasets…" aria-label="Filter datasets">
+            <select id="type-filter" aria-label="Filter by archive type">
+                <option value="">All types</option>
+                <option value="OCCURRENCE">Occurrence</option>
+                <option value="CAMTRAP_DP">Camtrap DP</option>
+                <option value="CHECKLIST">Checklist</option>
+                <option value="EVENT">Event</option>
+                <option value="METADATA">Metadata</option>
+            </select>
+            <select id="publisher-filter" aria-label="Filter by publishing organization"></select>
+            <select id="status-filter" aria-label="Filter by sync status">
+                <option value="">All statuses</option>
+                <option value="synced">Synced</option>
+                <option value="lagging">Lagging</option>
+                <option value="ahead">IPT ahead</option>
+                <option value="stale">Stale</option>
+                <option value="unknown">Unknown</option>
+            </select>
+            <span class="spacer"></span>
+            <span class="meta" id="last-updated"></span>
+            <button id="refresh-btn" title="Reload all data (bypasses the 6h cache)">⟳ Refresh</button>
+            <button id="download-btn" title="Export the currently displayed rows as CSV">⬇ Download CSV</button>
+            <button id="columns-btn" title="Show or hide table columns">▤ Columns</button>
+        </div>
+
+        <div id="progress"><div class="bar"></div></div>
+        <div id="status">Loading…</div>
+
+        <div id="error">
+            <span id="error-msg"></span>
+            <button id="retry-btn">Try again</button>
+        </div>
+
+        <div class="card">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-key="title" data-type="string">Dataset</th>
+                            <th data-key="type" data-type="filter" title="Click to filter by type">Type ▾</th>
+                            <th data-key="publisher" data-type="string">Publisher</th>
+                            <th data-key="records" data-type="number" title="Records indexed by GBIF (taxa for checklists)">Records</th>
+                            <th data-key="version" data-type="string" title="The GBIF registry only stores a version for some dataset types (e.g. checklists). IPT-published occurrence datasets carry no version in the registry — the version lives in the IPT/EML only.">Version</th>
+                            <th data-key="doi" data-type="string">DOI</th>
+                            <th data-key="license" data-type="string">License</th>
+                            <th data-key="created" data-type="date">Created</th>
+                            <th data-key="modified" data-type="date">GBIF Updated</th>
+                            <th data-key="pubDate" data-type="date">IPT Published</th>
+                            <th data-key="ingest" data-type="date">Last Ingest</th>
+                            <th data-key="sync" data-type="rank">Sync Status</th>
+                            <th data-key="issues" data-type="number" title="Records (occurrences) or names (checklists, via ChecklistBank) carrying the most frequent data-quality flag">Issues</th>
+                            <th data-key="citations" data-type="number" title="Known publications citing this dataset (GBIF literature index)">Citations</th>
+                            <th data-key="links" data-type="none">Links</th>
+                        </tr>
+                    </thead>
+                    <tbody id="body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="footer-note">
+            Sync legend: <span class="pill synced">Synced</span> ingested within 7 days ·
+            <span class="pill lagging">Lagging</span> ingested 8–30 days ago ·
+            <span class="pill ahead">IPT ahead</span> IPT published a newer version than GBIF ingested ·
+            <span class="pill stale">Stale</span> no ingest for over 30 days.
+            Row shading on “IPT Published” reflects publication age (≤7d, ≤30d, ≤60d, older).
+            Camtrap DP datasets are registry type “OCCURRENCE”; they are recognised here by their CAMTRAP_DP endpoint.
+            The registry no longer exposes archive sizes, so that column was removed.
+            Version is only populated for some registry types (e.g. checklists) — IPT occurrence datasets carry no registry version.
+            Checklist datasets are linked to ChecklistBank (metadata & classification pages); their issue counts come from the latest ChecklistBank import report.
+            Detail/metrics calls are cached in your browser for 6 hours; Refresh bypasses the cache.
+        </div>
     </div>
-    <table>
-        <thead>
-            <tr>
-                <th data-key="title">Dataset</th>
-                <th data-key="type">Archive Type</th>
-                <th data-key="version">Version</th>
-                <th data-key="size">Archive Size</th>
-                <th data-key="gbif">GBIF</th>
-                <th data-key="ipt">IPT Edit</th>
-                <th data-key="created">Created</th>
-                <th data-key="modified">GBIF Updated</th>
-                <th data-key="pubDate">IPT Published</th>
-                <th data-key="ingest">Last Ingest</th>
-                <th data-key="sync">Sync Status</th>
-            </tr>
-        </thead>
-        <tbody id="body"></tbody>
-    </table>
+
+    <div id="columns-menu" class="popup"></div>
+    <div id="type-menu" class="popup"></div>
+
     <script>
+        "use strict";
         const ORG = "75642970-f855-11dd-8235-b8a03c50a862";
         const IPT_BASE = "https://ipt.mnhn.lu/ipt/";
-        let rows = [];
-        let sortState = { key: null, asc: true };
+        const API = "https://api.gbif.org/v1";
+        const CLB_API = "https://api.checklistbank.org";
+        const CLB_BASE = "https://www.checklistbank.org";
+        const CACHE_KEY = "gbif-ipt-monitor:v3";
+        const CACHE_TTL = 6 * 3600 * 1000; // 6 hours
 
-        function days(d) {
+        const state = {
+            rows: [],            // all datasets (unfiltered)
+            view: [],            // filtered + sorted
+            sort: { key: "title", asc: true },
+            loading: false,
+            rowEls: new Map(),   // datasetKey -> <tr>
+        };
+
+        /* ---------- generic helpers ---------- */
+
+        function el(tag, cls, text) {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text !== undefined && text !== null && text !== "") n.textContent = text;
+            return n;
+        }
+        function link(href, text, title) {
+            const a = el("a", null, text);
+            a.href = href;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            if (title) a.title = title;
+            return a;
+        }
+        function fmtDate(d) {
+            if (!d) return "";
+            const date = new Date(d);
+            if (isNaN(date.getTime())) return "";
+            return date.toLocaleString(undefined, {
+                year: "numeric", month: "short", day: "numeric",
+                hour: "2-digit", minute: "2-digit"
+            });
+        }
+        function fmtNum(n) {
+            return (n === null || n === undefined) ? "—" : Number(n).toLocaleString();
+        }
+        function daysSince(d) {
             if (!d) return null;
-            return Math.floor((Date.now() - new Date(d)) / 86400000);
+            const t = new Date(d).getTime();
+            if (isNaN(t)) return null;
+            return Math.floor((Date.now() - t) / 86400000);
         }
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-        function fmt(d) {
-            return d ? new Date(d).toLocaleString() : "";
-        }
+        /* ---------- network (timeout, retry, ok-check) ---------- */
 
-        function formatSize(bytes) {
-            if (!bytes) return "—";
-            const units = ["Bytes", "KB", "MB", "GB"];
-            let size = bytes;
-            let unitIndex = 0;
-            while (size >= 1024 && unitIndex < units.length - 1) {
-                size /= 1024;
-                unitIndex++;
+        async function fetchJSON(url, timeoutMs = 20000, retries = 1) {
+            for (let attempt = 0; ; attempt++) {
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+                try {
+                    const res = await fetch(url, { signal: ctrl.signal, headers: { "Accept": "application/json" } });
+                    if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+                    return await res.json();
+                } catch (err) {
+                    if (attempt >= retries) throw err;
+                    await sleep(800 * (attempt + 1));
+                } finally {
+                    clearTimeout(timer);
+                }
             }
-            return `${size.toFixed(2)} ${units[unitIndex]}`;
         }
+
+        // Runs worker over items with bounded concurrency; never rejects.
+        async function pool(items, worker, concurrency, onProgress) {
+            let next = 0, done = 0;
+            const total = items.length;
+            async function runner() {
+                while (next < total) {
+                    const item = items[next++];
+                    try { await worker(item); }
+                    catch (e) { console.warn("pool item failed:", e); }
+                    done++;
+                    if (onProgress) onProgress(done, total);
+                }
+            }
+            const n = Math.max(1, Math.min(concurrency, total));
+            await Promise.all(Array.from({ length: n }, runner));
+        }
+
+        /* ---------- localStorage cache for per-dataset extras ---------- */
+
+        function readCache() {
+            try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; }
+            catch { return {}; }
+        }
+        function writeCache(cache) {
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch { /* quota/private mode */ }
+        }
+
+        /* ---------- GBIF + IPT data shaping ---------- */
 
         function extractResourceId(url) {
             if (!url) return null;
-            const m = url.match(/r=([^&]+)/);
+            const m = url.match(/[?&]r=([^&]+)/);
             return m ? m[1] : null;
         }
-
-        function getIPT(ds) {
-            const sources = [
-                ...(ds.identifiers || []),
-                ...(ds.endpoints || [])
-            ];
+        function findIPT(ds) {
+            const sources = [...(ds.identifiers || []), ...(ds.endpoints || [])];
             for (const s of sources) {
-                const url = s.identifier || s.url;
-                const id = extractResourceId(url);
-                if (id) {
-                    return `${IPT_BASE}resource?r=${id}`;
+                const url = s.identifier || s.url || "";
+                if (url.includes("ipt.mnhn.lu")) {
+                    const id = extractResourceId(url);
+                    if (id) return id;
+                    // an IPT URL without an r= param still points at the resource page
+                    if (/resource/.test(url)) return null;
                 }
+            }
+            for (const s of sources) {
+                const id = extractResourceId(s.identifier || s.url || "");
+                if (id) return id;
             }
             return null;
         }
 
-        function rowColor(pubDate) {
-            const age = days(pubDate);
+        function computeSync(row) {
+            const ingest = row.ingest;
+            const pub = row.pubDate;
+            if (!ingest) return { cls: "unknown", label: "Unknown" };
+            const dIngest = new Date(ingest);
+            const dPub = pub ? new Date(pub) : null;
+            const age = daysSince(ingest);
+            if (dPub && !isNaN(dPub.getTime()) && dPub.getTime() > dIngest.getTime()) {
+                return { cls: "ahead", label: "IPT ahead" };
+            }
+            if (age !== null && age <= 7) return { cls: "synced", label: "Synced" };
+            if (age !== null && age <= 30) return { cls: "lagging", label: "Lagging" };
+            return { cls: "stale", label: "Stale" };
+        }
+        const SYNC_RANK = { synced: 0, lagging: 1, ahead: 2, stale: 3, unknown: 4 };
+
+        function pubAgeClass(pubDate) {
+            const age = daysSince(pubDate);
             if (age === null) return "";
-            if (age <= 7) return "green";
-            if (age <= 30) return "yellow";
-            if (age <= 60) return "orange";
-            return "red";
+            if (age <= 7) return "p-green";
+            if (age <= 30) return "p-yellow";
+            if (age <= 60) return "p-orange";
+            return "p-red";
         }
 
-        function syncStatus(ds) {
-            const ingest = ds.dwca?.modified || ds.modified;
-            const pub = ds.pubDate;
-            const ingestAge = days(ingest);
-            const pubAge = days(pub);
-            if (ingestAge !== null && ingestAge <= 7) {
-                return "🟢 Fully synced";
-            }
-            if (pubAge !== null && ingestAge !== null && pubAge < ingestAge) {
-                return "🟠 IPT ahead";
-            }
-            if (ingestAge !== null && ingestAge > 30) {
-                return "🔴 Stale";
-            }
-            return "🟡 Lagging";
+        function licenseInfo(l) {
+            if (!l) return { label: "None", cls: "lic-warn" };
+            const u = l.toLowerCase();
+            if (u.includes("publicdomain/zero")) return { label: "CC0", cls: "lic-ok" };
+            if (u.includes("publicdomain/mark")) return { label: "PD", cls: "lic-ok" };
+            if (u.includes("/by/")) return { label: "CC-BY", cls: "lic-ok" };
+            if (u.includes("/by-nc/")) return { label: "CC-BY-NC", cls: "lic-mid" };
+            if (u.includes("/by-nc-sa/")) return { label: "CC-BY-NC-SA", cls: "lic-mid" };
+            return { label: "Other", cls: "lic-mid", title: l };
         }
 
-        async function fetchAll() {
-            let out = [];
-            let offset = 0;
+        const TYPE_CLASS = { OCCURRENCE: "occ", CHECKLIST: "chk", EVENT: "evt", METADATA: "meta" };
+
+        const PUBLISHER_ACRONYMS = {
+            "75642970-f855-11dd-8235-b8a03c50a862": "MNHNL",
+            "d56a3183-3603-4313-925a-a13ddc2eefec": "LIST",
+        };
+        function publisherAcronym(row) {
+            return PUBLISHER_ACRONYMS[row.publisherKey] || row.publisher;
+        }
+
+        function recordsValue(row) {
+            if (row.type === "CHECKLIST") return row.nameUsagesCount;
+            return row.recordCount;
+        }
+
+        /* ---------- loading ---------- */
+
+        async function fetchDatasetList() {
+            const out = [];
             const limit = 100;
+            let offset = 0;
             while (true) {
-                const url = `https://api.gbif.org/v1/dataset/search?publishing_org=${ORG}&limit=${limit}&offset=${offset}`;
-                const res = await fetch(url);
-                const json = await res.json();
-                out.push(...json.results);
-                if (json.endOfRecords) break;
+                // hosting_org = every dataset served through the MNHNL IPT installation,
+                // regardless of which organization publishes it
+                const json = await fetchJSON(
+                    `${API}/dataset/search?hosting_org=${ORG}&limit=${limit}&offset=${offset}`
+                );
+                out.push(...(json.results || []));
+                if (json.endOfRecords || !json.results?.length) break;
                 offset += limit;
             }
             return out;
         }
 
-        function render() {
+        async function load(bypassCache = false) {
+            if (state.loading) return;
+            state.loading = true;
+            const statusEl = document.getElementById("status");
+            const errorEl = document.getElementById("error");
+            const refreshBtn = document.getElementById("refresh-btn");
+            refreshBtn.disabled = true;
+            errorEl.style.display = "none";
+            statusEl.textContent = "Fetching dataset list…";
+
+            try {
+                const base = await fetchDatasetList();
+                const cache = bypassCache ? {} : readCache();
+                const fresh = {};
+
+                state.rows = base.map(d => ({
+                    key: d.key,
+                    title: d.title || d.key,
+                    type: d.type || "—",
+                    publisher: d.publishingOrganizationTitle || "—",
+                    publisherKey: d.publishingOrganizationKey || null,
+                    recordCount: d.recordCount ?? null,
+                    nameUsagesCount: d.nameUsagesCount ?? null,
+                    license: d.license || null,
+                    doi: d.doi || null,
+                    gbifUrl: `https://www.gbif.org/dataset/${d.key}`,
+                    // filled in later, once the detail record arrives:
+                    version: null, camtrap: false, created: null, modified: null,
+                    pubDate: null, ingest: null, iptId: null,
+                    issues: null, citations: null, clb: null,
+                    detailDone: false, extrasDone: false,
+                }));
+                state.sort = { key: "title", asc: true };
+                renderPublisherFilter();
+                applyFilters();
+                fetchCountryStats(); // independent of the per-dataset loads
+
+                // Progress: 1 unit per dataset for detail + 1 per extras batch.
+                let doneUnits = 0;
+                const totalUnits = state.rows.length * 2;
+                const tick = () => {
+                    const pct = Math.round((doneUnits / totalUnits) * 100);
+                    document.querySelector("#progress .bar").style.width = pct + "%";
+                    statusEl.textContent = `Loading dataset details & metrics… ${doneUnits}/${totalUnits} (${pct}%)`;
+                };
+                tick();
+
+                await pool(state.rows, async (row) => {
+                    let detail = cache[row.key]?.detail;
+                    if (!detail || Date.now() - cache[row.key].ts > CACHE_TTL) {
+                        detail = await fetchJSON(`${API}/dataset/${row.key}`);
+                        fresh[row.key] = { ts: Date.now(), detail };
+                    }
+                    fillDetail(row, detail);
+                    row.detailDone = true;
+                    updateRow(row);
+                    doneUnits++;
+                    tick();
+                }, 5);
+
+                statusEl.textContent = "Loading data-quality issues & citations…";
+                await pool(state.rows, async (row) => {
+                    const wantsIssues = row.type !== "CHECKLIST" && (row.recordCount ?? 0) > 0;
+                    const cachedExtra = cache[row.key]?.extras;
+                    let extras = null;
+                    const cacheUsable = cachedExtra && Date.now() - cache[row.key].ts <= CACHE_TTL;
+                    if (cacheUsable) {
+                        extras = cachedExtra;
+                    } else {
+                        extras = { issues: null, citations: null, clb: null };
+                        const jobs = [];
+                        // Data-quality issues: facet on ISSUE with limit=0 (no records, just counts).
+                        if (wantsIssues) {
+                            jobs.push(fetchJSON(
+                                `${API}/occurrence/search?datasetKey=${row.key}&limit=0&facet=issue`
+                            ).then(j => {
+                                const counts = j?.facets?.[0]?.counts || [];
+                                const meaningful = counts.filter(c => !/^ZERO_|^COUNTRY_DERIVED|^CONTINENT_DERIVED/.test(c.name));
+                                extras.issues = meaningful.length ? meaningful : counts;
+                            }).catch(() => {}));
+                        }
+                        // Checklists: resolve the ChecklistBank dataset via the GBIF key,
+                        // then read the aggregated issue counts from its latest import report.
+                        if (row.type === "CHECKLIST") {
+                            jobs.push(
+                                fetchJSON(`${CLB_API}/dataset?gbifKey=${row.key}&limit=1`)
+                                    .then(s => {
+                                        const ds = s?.result?.[0] ?? s?.results?.[0];
+                                        if (!ds?.key) return Promise.resolve();
+                                        return fetchJSON(`${CLB_API}/dataset/${ds.key}/import?limit=1&status=finished`)
+                                            .then(imp => {
+                                                const issuesCount = imp?.result?.[0]?.issuesCount || {};
+                                                const issues = Object.entries(issuesCount)
+                                                    .map(([name, count]) => ({ name, count: Number(count) }))
+                                                    .sort((a, b) => b.count - a.count);
+                                                extras.clb = { key: ds.key, issues };
+                                            });
+                                    })
+                                    .catch(() => {})
+                            );
+                        }
+                        // Citations: count of publications referencing the dataset.
+                        jobs.push(fetchJSON(
+                            `${API}/literature/search?gbifDatasetKey=${row.key}&limit=0`
+                        ).then(j => { extras.citations = j?.count ?? null; }).catch(() => {}));
+                        await Promise.allSettled(jobs);
+                        if (fresh[row.key]) fresh[row.key].extras = extras;
+                        else fresh[row.key] = { ts: Date.now(), extras };
+                    }
+                    if (extras.issues !== null) {
+                        row.issues = extras.issues.map(c => ({ name: c.name, count: c.count }));
+                    }
+                    row.citations = extras.citations;
+                    // null = unknown/not found in ChecklistBank once extras are done
+                    row.clb = extras.clb || false;
+                    row.extrasDone = true;
+                    updateRow(row);
+                    doneUnits++;
+                    tick();
+                }, 5);
+
+                // Merge the freshly fetched entries into the previous cache (keep old-but-fresh extras).
+                const merged = {};
+                for (const row of state.rows) {
+                    // keep cached halves (detail/extras) that were still fresh this run
+                    const entry = { ...cache[row.key], ...fresh[row.key] };
+                    merged[row.key] = Object.keys(entry).length ? entry : null;
+                }
+                writeCache(merged);
+
+                document.querySelector("#progress .bar").style.width = "100%";
+                statusEl.textContent = "";
+                document.getElementById("last-updated").textContent =
+                    `Updated ${new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`;
+            } catch (err) {
+                console.error(err);
+                document.getElementById("error-msg").textContent =
+                    `Failed to load data from the GBIF API: ${err.message || err}`;
+                document.getElementById("error").style.display = "flex";
+                statusEl.textContent = "";
+            } finally {
+                state.loading = false;
+                refreshBtn.disabled = false;
+                renderChips();
+            }
+        }
+
+        function fillDetail(row, d) {
+            row.version = d.version || null;
+            // GBIF marks Camtrap DP datasets by a CAMTRAP_DP endpoint, not by `type`
+            row.camtrap = (d.endpoints || []).some(e => e.type === "CAMTRAP_DP");
+            row.created = d.created || null;
+            row.modified = d.modified || null;
+            row.pubDate = d.pubDate || null;
+            row.ingest = d.dwca?.modified || d.modified || null;
+            row.iptId = findIPT(d);
+        }
+
+        /* ---------- rendering ---------- */
+
+        const COLS = ["title", "type", "publisher", "records", "version", "doi", "license",
+            "created", "modified", "pubDate", "ingest", "sync", "issues", "citations", "links"];
+        const COL_LABELS = {
+            title: "Dataset", type: "Type", publisher: "Publisher", records: "Records",
+            version: "Version", doi: "DOI", license: "License", created: "Created",
+            modified: "GBIF Updated", pubDate: "IPT Published", ingest: "Last Ingest",
+            sync: "Sync Status", issues: "Issues", citations: "Citations", links: "Links",
+        };
+        const COLS_STORAGE_KEY = "gbif-ipt-monitor:cols:v1";
+        state.hiddenCols = new Set();
+        try { state.hiddenCols = new Set(JSON.parse(localStorage.getItem(COLS_STORAGE_KEY)) || []); }
+        catch { state.hiddenCols = new Set(); }
+
+        function applyFilters() {
+            const q = document.getElementById("search").value.trim().toLowerCase();
+            const type = document.getElementById("type-filter").value;
+            const publisher = document.getElementById("publisher-filter").value;
+            const status = document.getElementById("status-filter").value;
+            state.view = state.rows.filter(r => {
+                if (q && !r.title.toLowerCase().includes(q)) return false;
+                if (type) {
+                    // camtrap datasets are registry type OCCURRENCE; refine via the dedicated option
+                    if (type === "CAMTRAP_DP" && !r.camtrap) return false;
+                    if (type !== "CAMTRAP_DP" && r.type !== type) return false;
+                }
+                if (publisher && r.publisherKey !== publisher) return false;
+                if (status && computeSync(r).cls !== status) return false;
+                return true;
+            });
+            sortRows();
+            renderTable();
+        }
+
+        function sortRows() {
+            const { key, asc } = state.sort;
+            if (!key) return;
+            const dir = asc ? 1 : -1;
+            const num = v => (v === null || v === undefined || v === "" ? -Infinity : Number(v));
+            state.view.sort((a, b) => {
+                let r = 0;
+                switch (key) {
+                    case "records": r = num(recordsValue(a)) - num(recordsValue(b)); break;
+                    case "issues": {
+                        const issueCount = row => row.issues?.[0]?.count ?? row.clb?.issues?.[0]?.count;
+                        r = num(issueCount(a)) - num(issueCount(b));
+                        break;
+                    }
+                    case "citations": r = num(a.citations) - num(b.citations); break;
+                    case "sync": r = SYNC_RANK[computeSync(a).cls] - SYNC_RANK[computeSync(b).cls]; break;
+                    case "created": case "modified": case "pubDate": case "ingest": {
+                        const ta = a[key] ? new Date(a[key]).getTime() : -Infinity;
+                        const tb = b[key] ? new Date(b[key]).getTime() : -Infinity;
+                        r = ta - tb;
+                        break;
+                    }
+                    default: {
+                        const x = (a[key] ?? "").toString();
+                        const y = (b[key] ?? "").toString();
+                        r = x.localeCompare(y);
+                    }
+                }
+                if (r === 0 && key !== "title") return a.title.localeCompare(b.title);
+                return r * dir;
+            });
+        }
+
+        function renderTable() {
             const tbody = document.getElementById("body");
-            tbody.innerHTML = "";
-            rows.forEach(r => {
+            tbody.textContent = "";
+            state.rowEls.clear();
+            for (const row of state.view) {
                 const tr = document.createElement("tr");
-                tr.className = rowColor(r.pubDate);
-                tr.innerHTML = `
-                    <td>${r.title}</td>
-                    <td>${r.type || "—"}</td>
-                    <td>${r.version || "—"}</td>
-                    <td>${r.size || "—"}</td>
-                    <td>
-                        <a target="_blank" href="${r.gbif}">
-                            GBIF
-                        </a>
-                    </td>
-                    <td>
-                        ${r.ipt ? `<a target="_blank" href="${r.ipt}">Edit</a>` : "—"}
-                    </td>
-                    <td>${fmt(r.created)}</td>
-                    <td>${fmt(r.modified)}</td>
-                    <td>${fmt(r.pubDate)}</td>
-                    <td>${fmt(r.ingest)}</td>
-                    <td>${r.sync}</td>
-                `;
+                state.rowEls.set(row.key, tr);
+                fillRow(tr, row);
                 tbody.appendChild(tr);
-            });
+            }
+            renderChips();
+            applyColumnVisibility();
         }
 
-        function sortBy(key) {
-            const asc = sortState.key === key ? !sortState.asc : true;
-            sortState = { key, asc };
-            rows.sort((a, b) => {
-                let x = a[key];
-                let y = b[key];
-                if (key === "created" || key === "modified" || key === "pubDate" || key === "ingest") {
-                    x = x ? new Date(x).getTime() : 0;
-                    y = y ? new Date(y).getTime() : 0;
-                    return asc ? x - y : y - x;
-                }
-                if (key === "size") {
-                    x = x ? parseFloat(x) : 0;
-                    y = y ? parseFloat(y) : 0;
-                    return asc ? x - y : y - x;
-                }
-                x = (x || "").toString();
-                y = (y || "").toString();
-                return asc ? x.localeCompare(y) : y.localeCompare(x);
-            });
-            render();
+        function updateRow(row) {
+            const tr = state.rowEls.get(row.key);
+            if (tr) fillRow(tr, row);
+            applyColumnVisibility();
+            renderChips();
         }
 
-        function attachSorting() {
-            document.querySelectorAll("th").forEach(th => {
-                th.addEventListener("click", () => {
-                    sortBy(th.dataset.key);
+        function fillRow(tr, row) {
+            tr.textContent = "";
+            const sync = computeSync(row);
+
+            // Dataset title (publisher and DOI have their own columns)
+            const tdTitle = el("td");
+            tdTitle.appendChild(el("div", "title-cell", row.title));
+            tr.appendChild(tdTitle);
+
+            // Type badge (Camtrap DP is detected via its endpoint, not the registry type)
+            const tdType = el("td");
+            const typeLabel = row.camtrap ? "camtrap dp"
+                : row.type === "—" ? "—" : row.type.toLowerCase();
+            const typeCls = row.camtrap ? "camtrap" : (TYPE_CLASS[row.type] || "other");
+            tdType.appendChild(el("span", "badge " + typeCls, typeLabel));
+            tr.appendChild(tdType);
+
+            // Publisher (acronym badge, full name on hover)
+            const tdPublisher = el("td");
+            const pubSpan = el("span", "badge pub", publisherAcronym(row));
+            pubSpan.title = row.publisher;
+            tdPublisher.appendChild(pubSpan);
+            tr.appendChild(tdPublisher);
+
+            // Records
+            const rec = recordsValue(row);
+            tr.appendChild(el("td", "num",
+                rec === null ? "—" : fmtNum(rec) + (row.type === "CHECKLIST" ? " taxa" : "")));
+
+            // Version (only present for some registry types, see column tooltip)
+            const tdVer = el("td", null, row.version || "—");
+            if (!row.version && row.detailDone && row.type !== "CHECKLIST") {
+                tdVer.title = "No version in the GBIF registry for this dataset type";
+            }
+            tr.appendChild(tdVer);
+
+            // DOI
+            const tdDoi = el("td");
+            if (row.doi) {
+                const doiA = link(`https://doi.org/${row.doi}`, row.doi, "Resolve DOI");
+                doiA.title = row.doi;
+                tdDoi.appendChild(doiA);
+            } else {
+                tdDoi.textContent = "—";
+            }
+            tr.appendChild(tdDoi);
+
+            // License
+            const lic = licenseInfo(row.license);
+            const tdLic = el("td");
+            const licSpan = el("span", lic.cls, lic.label);
+            if (lic.title) licSpan.title = lic.title;
+            else if (lic.label === "None") licSpan.title = "No license set in IPT/GBIF metadata";
+            tdLic.appendChild(licSpan);
+            tr.appendChild(tdLic);
+
+            // Dates
+            tr.appendChild(el("td", null, row.created ? fmtDate(row.created) : "—"));
+            tr.appendChild(el("td", null, row.modified ? fmtDate(row.modified) : "—"));
+            const tdPub = el("td", null, row.pubDate ? fmtDate(row.pubDate) : "—");
+            tdPub.className = pubAgeClass(row.pubDate);
+            tr.appendChild(tdPub);
+            tr.appendChild(el("td", null, row.ingest ? fmtDate(row.ingest) : "—"));
+
+            // Sync status pill
+            const tdSync = el("td");
+            tdSync.appendChild(el("span", "pill " + sync.cls, sync.label));
+            tr.appendChild(tdSync);
+
+            // Issues (GBIF occurrence flags, or ChecklistBank name-usage issues for checklists)
+            const tdIssues = el("td", "num");
+            if (row.type === "CHECKLIST") {
+                if (!row.extrasDone) {
+                    tdIssues.appendChild(el("span", "pending", "…"));
+                } else if (!row.clb) {
+                    tdIssues.textContent = "—";
+                    tdIssues.title = "Not found in ChecklistBank";
+                } else if (!row.clb.issues.length) {
+                    tdIssues.appendChild(el("span", "lic-ok", "✓ none"));
+                    tdIssues.title = "No issues in the latest ChecklistBank import";
+                } else {
+                    const top = row.clb.issues[0];
+                    const tip = row.clb.issues.slice(0, 5)
+                        .map(c => `${c.name}: ${fmtNum(c.count)}`).join("\n");
+                    tdIssues.appendChild(link(
+                        `${CLB_BASE}/dataset/${row.clb.key}/issues`,
+                        fmtNum(top.count), tip + "\n(click: ChecklistBank issues report)"
+                    ));
+                }
+            } else if (row.recordCount === 0) {
+                tdIssues.textContent = "—";
+            } else if (!row.extrasDone) {
+                tdIssues.appendChild(el("span", "pending", "…"));
+            } else if (row.issues === null) {
+                tdIssues.textContent = "—";
+            } else if (!row.issues.length) {
+                tdIssues.appendChild(el("span", "lic-ok", "✓ none"));
+            } else {
+                const top = row.issues[0];
+                const tip = row.issues.slice(0, 5)
+                    .map(c => `${c.name}: ${fmtNum(c.count)}`).join("\n");
+                tdIssues.appendChild(link(
+                    `https://www.gbif.org/occurrence/search?datasetKey=${row.key}&issue=${top.name}`,
+                    fmtNum(top.count), tip + "\n(click: occurrences with this issue)"
+                ));
+            }
+            tr.appendChild(tdIssues);
+
+            // Citations
+            const tdCit = el("td", "num");
+            if (!row.extrasDone) tdCit.appendChild(el("span", "pending", "…"));
+            else if (row.citations === null) tdCit.textContent = "—";
+            else tdCit.appendChild(link(
+                `https://www.gbif.org/literature/search?gbifDatasetKey=${row.key}`,
+                fmtNum(row.citations), "Publications citing this dataset (GBIF literature index)"
+            ));
+            tr.appendChild(tdCit);
+
+            // Links
+            const tdLinks = el("td");
+            const wrapLinks = el("div", "links");
+            wrapLinks.appendChild(link(row.gbifUrl, "GBIF", "GBIF dataset page"));
+            if (row.iptId) {
+                wrapLinks.appendChild(link(`${IPT_BASE}resource?r=${row.iptId}`, "IPT", "IPT resource page (edit)"));
+                const dwcaA = link(`${IPT_BASE}archive.do?r=${row.iptId}`, "⬇ DwC-A",
+                    "Download the raw Darwin Core Archive as GBIF ingests it");
+                dwcaA.classList.add("dwca");
+                wrapLinks.appendChild(dwcaA);
+            }
+            if (row.clb && row.clb.key) {
+                wrapLinks.appendChild(link(`${CLB_BASE}/dataset/${row.clb.key}/metadata`, "CLB metadata", "ChecklistBank dataset metadata"));
+                wrapLinks.appendChild(link(`${CLB_BASE}/dataset/${row.clb.key}/classification`, "CLB classification", "ChecklistBank classification browser"));
+            }
+            tdLinks.appendChild(wrapLinks);
+            tr.appendChild(tdLinks);
+        }
+
+        function renderChips() {
+            const rows = state.rows;
+            if (!rows.length) return;
+            const totalRecords = rows.reduce((s, r) => s + (r.type === "CHECKLIST" ? 0 : (r.recordCount || 0)), 0);
+            const counts = { synced: 0, lagging: 0, ahead: 0, stale: 0, unknown: 0 };
+            rows.forEach(r => { counts[computeSync(r).cls]++; });
+            const noLicense = rows.filter(r => !r.license).length;
+            const chips = [
+                `<span class="chip"><b>${rows.length}</b> datasets</span>`,
+                `<span class="chip"><b>${fmtNum(totalRecords)}</b> occurrence records</span>`,
+            ];
+            // records per dataset type (camtrap DP is a refinement of occurrence)
+            const byType = new Map(); // label -> {n, records, taxa}
+            for (const r of rows) {
+                const isCamtrap = r.camtrap && r.type === "OCCURRENCE";
+                const label = r.type === "CHECKLIST" ? "checklist"
+                    : isCamtrap ? "camtrap DP" : (r.type || "other").toLowerCase();
+                const t = byType.get(label) || { n: 0, records: 0, taxa: 0 };
+                t.n++;
+                if (r.type === "CHECKLIST") t.taxa += (r.nameUsagesCount || 0);
+                else t.records += (r.recordCount || 0);
+                byType.set(label, t);
+            }
+            for (const [label, t] of byType) {
+                const detail = label === "checklist"
+                    ? `${fmtNum(t.n)} · ${fmtNum(t.taxa)} taxa`
+                    : `${fmtNum(t.n)} · ${fmtNum(t.records)} records`;
+                chips.push(`<span class="chip"><b>${label}</b> ${detail}</span>`);
+            }
+            chips.push(`<span class="chip"><b>${counts.synced}</b> synced</span>`);
+            if (counts.ahead) chips.push(`<span class="chip warn"><b>${counts.ahead}</b> IPT ahead of GBIF</span>`);
+            if (counts.stale) chips.push(`<span class="chip warn"><b>${counts.stale}</b> stale (30d+)</span>`);
+            if (counts.lagging) chips.push(`<span class="chip"><b>${counts.lagging}</b> lagging</span>`);
+            if (noLicense) chips.push(`<span class="chip warn"><b>${noLicense}</b> without license</span>`);
+            document.getElementById("chips").innerHTML = chips.join("");
+            renderPublishers();
+        }
+
+        function renderPublisherFilter() {
+            const sel = document.getElementById("publisher-filter");
+            const seen = new Map(); // key -> title
+            for (const r of state.rows) {
+                if (r.publisherKey) seen.set(r.publisherKey, r.publisher);
+            }
+            const prev = sel.value;
+            sel.textContent = "";
+            sel.appendChild(el("option", null, "All publishers")).value = "";
+            for (const [key, title] of seen) {
+                const opt = el("option", null, title);
+                opt.value = key;
+                sel.appendChild(opt);
+            }
+            sel.value = prev;
+            if (sel.value !== prev) sel.value = "";
+        }
+
+        /* ---------- Luxembourg country panel ---------- */
+
+        let countryStats = null;
+
+        async function fetchCountryStats() {
+            const jobs = await Promise.allSettled([
+                fetchJSON(`${API}/occurrence/count?publishingCountry=LU`),
+                fetchJSON(`${API}/occurrence/count?country=LU`),
+                fetchJSON(`${API}/dataset/search?publishing_country=LU&limit=0`),
+            ]);
+            const [pub, about, datasets] = jobs.map(j => j.status === "fulfilled" ? j.value : null);
+            countryStats = {
+                publishedFromLU: typeof pub === "number" ? pub : null,
+                aboutLU: typeof about === "number" ? about : null,
+                datasetsPublishedFromLU: datasets?.count ?? null,
+            };
+            renderCountryStats();
+        }
+
+        function renderCountryStats() {
+            const box = document.getElementById("country-stats");
+            box.textContent = "";
+            const stat = (n, label) => {
+                const div = el("div", "stat");
+                div.appendChild(el("span", "n", n === null ? "—" : fmtNum(n)));
+                div.appendChild(el("span", "l", label));
+                box.appendChild(div);
+            };
+            if (!countryStats) {
+                box.appendChild(el("span", "pending", "Loading country statistics…"));
+                return;
+            }
+            stat(countryStats.publishedFromLU, "Occurrences published from Luxembourg");
+            stat(countryStats.datasetsPublishedFromLU, "Datasets published from Luxembourg");
+            stat(countryStats.aboutLU, "Occurrences about Luxembourg (in country)");
+        }
+
+        function renderPublishers() {
+            const tbody = document.getElementById("pub-body");
+            if (!tbody || !state.rows.length) return;
+            // aggregate per publishing organization
+            const orgs = new Map(); // key -> {title, n, records, taxa, types: Map}
+            for (const r of state.rows) {
+                const key = r.publisherKey || r.publisher;
+                let o = orgs.get(key);
+                if (!o) {
+                    o = { title: r.publisher, n: 0, records: 0, taxa: 0, types: new Map() };
+                    orgs.set(key, o);
+                }
+                o.n++;
+                if (r.type === "CHECKLIST") o.taxa += (r.nameUsagesCount || 0);
+                else o.records += (r.recordCount || 0);
+                const isCamtrap = r.camtrap && r.type === "OCCURRENCE";
+                const tLabel = r.type === "CHECKLIST" ? "checklist"
+                    : isCamtrap ? "camtrap DP" : (r.type || "other").toLowerCase();
+                o.types.set(tLabel, (o.types.get(tLabel) || 0) + 1);
+            }
+            tbody.textContent = "";
+            for (const o of orgs.values()) {
+                const tr = document.createElement("tr");
+                tr.appendChild(el("td", null, o.title));
+                tr.appendChild(el("td", "num", fmtNum(o.n)));
+                const tdTypes = el("td");
+                const parts = [...o.types.entries()].sort((a, b) => b[1] - a[1]);
+                tdTypes.textContent = parts.map(([t, n]) => `${n} ${t}`).join(" · ");
+                tr.appendChild(tdTypes);
+                tr.appendChild(el("td", "num", fmtNum(o.records)));
+                tr.appendChild(el("td", "num", fmtNum(o.taxa)));
+                tbody.appendChild(tr);
+            }
+        }
+
+        /* ---------- column visibility + header filter popups ---------- */
+
+        function applyColumnVisibility() {
+            // fillRow appends cells in COLS order, so column i of every row matches COLS[i]
+            const ths = document.querySelectorAll("thead th[data-key]");
+            COLS.forEach((key, i) => {
+                const hide = state.hiddenCols.has(key);
+                if (ths[i]) ths[i].classList.toggle("colhidden", hide);
+                document.querySelectorAll("#body tr").forEach(tr => {
+                    const td = tr.children[i];
+                    if (td) td.classList.toggle("colhidden", hide);
                 });
             });
         }
 
+        function saveHiddenCols() {
+            try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify([...state.hiddenCols])); } catch { }
+        }
+
+        function closePopups() {
+            document.querySelectorAll(".popup").forEach(p => p.classList.remove("open"));
+        }
+
+        function openPopupAt(menu, anchor) {
+            closePopups();
+            menu.classList.add("open");
+            const r = anchor.getBoundingClientRect();
+            const vw = document.documentElement.clientWidth;
+            let left = r.left + window.scrollX;
+            const menuW = menu.offsetWidth;
+            if (left + menuW + 8 > vw + window.scrollX) {
+                left = Math.max(8, vw + window.scrollX - menuW - 8);
+            }
+            menu.style.left = left + "px";
+            menu.style.top = (r.bottom + window.scrollY + 4) + "px";
+        }
+
+        function toggleColumnsMenu(anchor) {
+            const menu = document.getElementById("columns-menu");
+            if (menu.classList.contains("open")) { closePopups(); return; }
+            menu.textContent = "";
+            COLS.forEach(key => {
+                const label = el("label", "menu-item");
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.checked = !state.hiddenCols.has(key);
+                cb.addEventListener("change", () => {
+                    if (cb.checked) state.hiddenCols.delete(key);
+                    else state.hiddenCols.add(key);
+                    saveHiddenCols();
+                    applyColumnVisibility();
+                });
+                label.appendChild(cb);
+                label.appendChild(el("span", null, COL_LABELS[key] || key));
+                menu.appendChild(label);
+            });
+            openPopupAt(menu, anchor);
+        }
+
+        function typeFilterOptions() {
+            const opts = new Map(); // value -> { label, n }
+            for (const r of state.rows) {
+                const isCamtrap = r.camtrap && r.type === "OCCURRENCE";
+                if (isCamtrap) {
+                    const o = opts.get("CAMTRAP_DP") || { label: "Camtrap DP", n: 0 };
+                    o.n++; opts.set("CAMTRAP_DP", o);
+                } else if (r.type && r.type !== "—") {
+                    const o = opts.get(r.type) || { label: r.type.toLowerCase(), n: 0 };
+                    o.n++; opts.set(r.type, o);
+                }
+            }
+            const order = ["OCCURRENCE", "CAMTRAP_DP", "CHECKLIST", "EVENT", "METADATA"];
+            return [...opts.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+        }
+
+        function toggleTypeMenu(anchor) {
+            const menu = document.getElementById("type-menu");
+            if (menu.classList.contains("open")) { closePopups(); return; }
+            const sel = document.getElementById("type-filter");
+            menu.textContent = "";
+            const add = (value, label, count) => {
+                const item = el("div", "menu-item" + (sel.value === value ? " active" : ""));
+                item.appendChild(el("span", null, label));
+                if (count !== undefined) item.appendChild(el("span", "count", String(count)));
+                item.addEventListener("click", () => {
+                    sel.value = value;
+                    applyFilters();
+                    closePopups();
+                });
+                menu.appendChild(item);
+            };
+            add("", "All types");
+            menu.appendChild(el("div", "menu-sep"));
+            for (const [value, o] of typeFilterOptions()) add(value, o.label, o.n);
+            openPopupAt(menu, anchor);
+        }
+
+        /* ---------- CSV export ---------- */
+
         function downloadCSV() {
             const headers = [
-                "Dataset Title",
-                "Archive Type",
-                "Version",
-                "Archive Size",
-                "GBIF URL",
-                "GBIF Dataset Key",
-                "IPT URL",
-                "IPT Resource ID",
-                "Created",
-                "GBIF Updated",
-                "IPT Published",
-                "Last Ingest",
-                "Sync Status"
+                // table data, in column order
+                "Dataset Title", "Archive Type", "Camtrap DP", "Publisher", "Publisher Acronym",
+                "Records", "Version", "DOI", "DOI URL", "License",
+                "Created", "GBIF Updated", "IPT Published", "Last Ingest",
+                "Sync Status", "Top Data Issue", "Top Issue Count", "Data Issues (Top 5)", "Citations",
+                // link columns (one per link shown in the table)
+                "GBIF URL", "GBIF Dataset Key",
+                "IPT URL", "IPT Resource ID", "DwC-A URL",
+                "ChecklistBank Key", "CLB Metadata URL", "CLB Classification URL", "CLB Issues URL"
             ];
-            const csvRows = [];
-            csvRows.push(headers.join(","));
-            rows.forEach(row => {
-                const gbifKey = row.gbif.split("/").pop();
-                const iptResourceId = row.ipt ? extractResourceId(row.ipt) : "—";
-                const values = [
-                    `"${row.title.replace(/"/g, '""')}"`,
-                    `"${row.type || "—"}"`,
-                    `"${row.version || "—"}"`,
-                    `"${row.size || "—"}"`,
-                    `"${row.gbif}"`,
-                    `"${gbifKey}"`,
-                    `"${row.ipt || "—"}"`,
-                    `"${iptResourceId}"`,
-                    `"${fmt(row.created)}"`,
-                    `"${fmt(row.modified)}"`,
-                    `"${fmt(row.pubDate)}"`,
-                    `"${fmt(row.ingest)}"`,
-                    `"${row.sync}"`
-                ];
-                csvRows.push(values.join(","));
-            });
-            const csvString = csvRows.join("\n");
-            const blob = new Blob([csvString], { type: "text/csv" });
+            const esc = v => `"${String(v ?? "—").replace(/"/g, '""')}"`;
+            const lines = [headers.join(",")];
+            for (const r of state.view) {
+                const sync = computeSync(r);
+                const issues = (r.type === "CHECKLIST" ? r.clb?.issues : r.issues) || [];
+                const top = issues[0];
+                const top5 = issues.slice(0, 5)
+                    .map(c => `${c.name}: ${c.count}`).join("; ");
+                const typeLabel = r.camtrap && r.type === "OCCURRENCE"
+                    ? "OCCURRENCE (CAMTRAP_DP)" : r.type;
+                const clbKey = r.clb?.key || "";
+                const iptUrl = r.iptId ? `${IPT_BASE}resource?r=${r.iptId}` : "";
+                const dwcaUrl = r.iptId ? `${IPT_BASE}archive.do?r=${r.iptId}` : "";
+                lines.push([
+                    esc(r.title), esc(typeLabel), esc(r.camtrap ? "yes" : "no"),
+                    esc(r.publisher), esc(publisherAcronym(r)),
+                    esc(recordsValue(r)), esc(r.version),
+                    esc(r.doi), esc(r.doi ? `https://doi.org/${r.doi}` : ""),
+                    esc(r.license || "None"),
+                    esc(fmtDate(r.created)), esc(fmtDate(r.modified)),
+                    esc(fmtDate(r.pubDate)), esc(fmtDate(r.ingest)),
+                    esc(sync.label),
+                    esc(top ? top.name : ""), esc(top ? top.count : ""), esc(top5),
+                    esc(r.citations),
+                    esc(r.gbifUrl), esc(r.key),
+                    esc(iptUrl), esc(r.iptId), esc(dwcaUrl),
+                    esc(clbKey),
+                    esc(clbKey ? `${CLB_BASE}/dataset/${clbKey}/metadata` : ""),
+                    esc(clbKey ? `${CLB_BASE}/dataset/${clbKey}/classification` : ""),
+                    esc(clbKey ? `${CLB_BASE}/dataset/${clbKey}/issues` : "")
+                ].join(","));
+            }
+            // \uFEFF BOM so Excel detects UTF-8 correctly
+            const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
             a.download = "gbif_ipt_datasets.csv";
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
+            a.remove();
             URL.revokeObjectURL(url);
         }
 
-        async function run() {
-            const status = document.getElementById("status");
-            const downloadBtn = document.getElementById("download-btn");
-            downloadBtn.addEventListener("click", downloadCSV);
-            const base = await fetchAll();
-            status.innerText = `Loading ${base.length} datasets...`;
-            const full = await Promise.all(
-                base.map(d =>
-                    fetch(`https://api.gbif.org/v1/dataset/${d.key}`)
-                        .then(r => r.json())
-                        .catch(() => null)
-                )
-            );
-            rows = full.filter(Boolean).map(d => {
-                const ingest = d.dwca?.modified || d.modified;
-                return {
-                    title: d.title,
-                    type: d.type || "—",
-                    version: d.version || "—",
-                    size: d.dwca?.size ? formatSize(d.dwca.size) : "—",
-                    gbif: `https://www.gbif.org/dataset/${d.key}`,
-                    ipt: getIPT(d),
-                    created: d.created,
-                    modified: d.modified,
-                    pubDate: d.pubDate,
-                    ingest,
-                    sync: syncStatus(d)
-                };
+        /* ---------- events + boot ---------- */
+
+        function attachEvents() {
+            document.querySelectorAll("th[data-key]").forEach(th => {
+                th.addEventListener("click", e => {
+                    const key = th.dataset.key;
+                    if (th.dataset.type === "filter") {
+                        e.stopPropagation();
+                        toggleTypeMenu(th);
+                        return;
+                    }
+                    if (th.dataset.type === "none") return;
+                    state.sort = (state.sort.key === key)
+                        ? { key, asc: !state.sort.asc }
+                        : { key, asc: true };
+                    updateSortIndicators();
+                    sortRows();
+                    renderTable();
+                });
             });
-            render();
-            attachSorting();
-            status.innerText = `Loaded ${rows.length} datasets`;
+            let debounce;
+            document.getElementById("search").addEventListener("input", () => {
+                clearTimeout(debounce);
+                debounce = setTimeout(applyFilters, 150);
+            });
+            document.getElementById("type-filter").addEventListener("change", applyFilters);
+            document.getElementById("publisher-filter").addEventListener("change", applyFilters);
+            document.getElementById("status-filter").addEventListener("change", applyFilters);
+            document.getElementById("download-btn").addEventListener("click", downloadCSV);
+            document.getElementById("columns-btn").addEventListener("click", e => {
+                e.stopPropagation();
+                toggleColumnsMenu(e.currentTarget);
+            });
+            // close popups when clicking anywhere outside them
+            document.addEventListener("click", e => {
+                if (!e.target.closest(".popup")) closePopups();
+            });
+            document.addEventListener("keydown", e => {
+                if (e.key === "Escape") closePopups();
+            });
+            document.getElementById("refresh-btn").addEventListener("click", () => load(true));
+            document.getElementById("retry-btn").addEventListener("click", () => load(true));
         }
-        run();
+
+        function updateSortIndicators() {
+            document.querySelectorAll("th[data-key]").forEach(th => {
+                const arrow = th.querySelector(".arrow");
+                if (th.dataset.key === state.sort.key) {
+                    if (!arrow) th.appendChild(el("span", "arrow", state.sort.asc ? "▲" : "▼"));
+                    else arrow.textContent = state.sort.asc ? "▲" : "▼";
+                } else if (arrow) arrow.remove();
+            });
+        }
+
+        attachEvents();
+        updateSortIndicators();
+        load();
     </script>
 </body>
 </html>
