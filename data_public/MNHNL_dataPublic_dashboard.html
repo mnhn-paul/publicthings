@@ -3,16 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MNHNL Datasets Explorer</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0"></script>
+    <title>MNHNL data.public.lu Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 20px;
             line-height: 1.4;
             color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 0.95em;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        .header-controls-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .as-of {
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .btn-secondary {
+            background-color: white;
+            color: #2980b9;
+            border: 1px solid #3498db;
+        }
+        .btn-secondary:hover {
+            background-color: #eaf4fb;
+            color: #1a5276;
+        }
+        .error-banner {
+            display: none;
+            background-color: #fdedec;
+            border: 1px solid #f5b7b1;
+            color: #922b21;
+            padding: 12px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+        .error-banner.show {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
         }
         .section {
             background-color: #f9f9f9;
@@ -29,6 +81,41 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .section-note {
+            font-weight: normal;
+            font-size: 0.85em;
+            color: #7f8c8d;
+        }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            background-color: #fff;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 14px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .kpi-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        .kpi-label {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .kpi-card.warning .kpi-value {
+            color: #d35400;
         }
         .dataset {
             border: 1px solid #ddd;
@@ -67,6 +154,11 @@
         .dataset-meta {
             font-size: 0.85em;
             color: #666;
+            margin-bottom: 4px;
+        }
+        .dataset-stats {
+            font-size: 0.85em;
+            color: #2980b9;
             margin-bottom: 8px;
         }
         .resource-item {
@@ -98,10 +190,13 @@
             margin-left: 15px;
             display: inline-block;
         }
-        .chart-container {
+        .chart-container-md {
             width: 100%;
-            height: 450px;
-            margin-bottom: 15px;
+            height: 400px;
+        }
+        .chart-container-sm {
+            width: 100%;
+            height: 320px;
         }
         .tag-cloud {
             display: flex;
@@ -117,6 +212,8 @@
             cursor: pointer;
             transition: all 0.2s;
             border: 1px solid transparent;
+            color: #333;
+            font-family: inherit;
         }
         .tag:hover {
             background-color: #b2ebf2;
@@ -145,6 +242,7 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
         .tag-controls {
             display: flex;
@@ -173,6 +271,13 @@
         button:active {
             transform: translateY(0);
         }
+        .search-input {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 0.9em;
+            width: 220px;
+        }
         .thumbnail {
             max-width: 225px;
             max-height: 225px;
@@ -199,12 +304,18 @@
         }
         .toggle-link {
             color: #3498db;
+            background: none;
+            border: none;
             text-decoration: none;
             font-size: 0.9em;
             cursor: pointer;
+            padding: 0;
         }
         .toggle-link:hover {
             text-decoration: underline;
+            background: none;
+            transform: none;
+            color: #2980b9;
         }
         .no-thumbnail {
             width: 225px;
@@ -218,27 +329,115 @@
             color: #999;
             font-size: 0.8em;
         }
-        .chart-legend {
+        .reuse-item {
+            background-color: #fff;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 12px;
+            margin-bottom: 10px;
             display: flex;
-            justify-content: center;
-            margin-top: 10px;
-            gap: 20px;
+            gap: 15px;
+            align-items: flex-start;
         }
-        .legend-item {
+        .reuse-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 4px;
+            object-fit: cover;
+            border: 1px solid #eee;
+            flex-shrink: 0;
+            background-color: #f5f5f5;
+        }
+        .reuse-info {
+            flex: 1;
+        }
+        .reuse-title {
+            font-weight: 600;
+            font-size: 1em;
+            margin-bottom: 3px;
+        }
+        .reuse-title a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .reuse-title a:hover {
+            text-decoration: underline;
+        }
+        .reuse-meta {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 6px;
+        }
+        .reuse-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            background-color: #e8f4fd;
+            color: #1a5276;
+            margin-right: 5px;
+        }
+        .reuse-datasets {
+            font-size: 0.85em;
+            color: #7f8c8d;
+        }
+        .reuse-datasets a {
+            color: #2980b9;
+            text-decoration: none;
+        }
+        .reuse-datasets a:hover {
+            text-decoration: underline;
+        }
+        .fix-item {
+            background-color: #fff;
+            border: 1px solid #eee;
+            border-left: 4px solid #e67e22;
+            border-radius: 4px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+        }
+        .fix-header {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 5px;
+            flex-wrap: wrap;
+            gap: 8px;
         }
-        .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 2px;
+        .fix-title a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 600;
         }
-        .datasets-legend {
-            background-color: rgba(52, 152, 219, 0.6);
+        .fix-title a:hover {
+            text-decoration: underline;
         }
-        .resources-legend {
-            background-color: rgba(155, 89, 182, 0.6);
+        .fix-score {
+            font-weight: bold;
+            color: #d35400;
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
+        .fix-flags {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .flag {
+            background-color: #fdf2e9;
+            color: #b9541b;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.78em;
+        }
+        .stale-badge {
+            display: inline-block;
+            background-color: #fdf2e9;
+            color: #b9541b;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.78em;
+            margin-left: 5px;
         }
         .org-section {
             display: flex;
@@ -350,6 +549,11 @@
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
+        footer {
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #95a5a6;
+        }
         @media (max-width: 768px) {
             .grid-container {
                 grid-template-columns: 1fr;
@@ -364,154 +568,427 @@
     </style>
 </head>
 <body>
-    <h1>MNHNL Datasets Explorer</h1>
+    <h1>MNHNL on data.public.lu</h1>
+    <p class="subtitle">Insights into the datasets published by the Musée national d'histoire naturelle Luxembourg on the Luxembourgish open data portal — for maintainers.</p>
 
-    <!-- Organization and General Stats Grid -->
-    <div class="grid-container">
-        <!-- Organization Info Section -->
-        <div class="section">
-            <h2 class="section-title">Organization Information</h2>
-            <div id="org-loading" class="loading">Loading organization info...</div>
-            <div id="org-info" style="display: none;">
-                <div class="org-section">
-                    <div class="org-logo">
-                        <img id="org-logo" src="" alt="Organization Logo">
-                    </div>
-                    <div class="org-info">
-                        <div class="org-name" id="org-name"></div>
-                        <div class="org-meta">
-                            <div class="org-meta-item">
-                                <span>Acronym:</span>
-                                <span id="org-acronym" class="stat-highlight"></span>
-                            </div>
-                            <div class="org-meta-item">
-                                <span>Datasets:</span>
-                                <span id="org-datasets" class="stat-highlight"></span>
-                            </div>
-                            <div class="org-meta-item">
-                                <span>Members:</span>
-                                <span id="org-members" class="stat-highlight"></span>
-                            </div>
+    <div class="header-controls">
+        <div class="header-controls-left">
+            <button id="refresh-btn" class="btn-secondary">Refresh Data</button>
+            <button id="export-btn" class="btn-secondary">Export CSV</button>
+        </div>
+        <span id="as-of" class="as-of"></span>
+    </div>
+
+    <div id="error-banner" class="error-banner">
+        <span id="error-message">Failed to load data from data.public.lu.</span>
+        <button id="retry-btn">Retry</button>
+    </div>
+
+    <div id="main-loading" class="loading">Loading data from data.public.lu...</div>
+
+    <div id="dashboard" style="display: none;">
+        <!-- KPI strip -->
+        <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-value" id="kpi-datasets">0</div><div class="kpi-label">Datasets</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="kpi-resources">0</div><div class="kpi-label">Resources</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="kpi-downloads">0</div><div class="kpi-label">Downloads</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="kpi-views">0</div><div class="kpi-label">Dataset Views</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="kpi-reuses">0</div><div class="kpi-label">Reuses</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="kpi-followers">0</div><div class="kpi-label">Followers</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="kpi-discussions">0</div><div class="kpi-label">Discussions</div></div>
+            <div class="kpi-card warning"><div class="kpi-value" id="kpi-stale">0</div><div class="kpi-label">Not Updated in 2+ Years</div></div>
+        </div>
+
+        <!-- Organization and General Stats Grid -->
+        <div class="grid-container">
+            <!-- Organization Info Section -->
+            <div class="section">
+                <h2 class="section-title">Organization Information</h2>
+                <div id="org-loading" class="loading">Loading organization info...</div>
+                <div id="org-info" style="display: none;">
+                    <div class="org-section">
+                        <div class="org-logo">
+                            <img id="org-logo" src="" alt="Organization Logo">
                         </div>
-                        <div id="org-badges" style="margin-bottom: 10px;"></div>
-                        <div class="org-links" id="org-links"></div>
+                        <div class="org-info">
+                            <div class="org-name" id="org-name"></div>
+                            <div class="org-meta">
+                                <div class="org-meta-item">
+                                    <span>Acronym:</span>
+                                    <span id="org-acronym" class="stat-highlight"></span>
+                                </div>
+                                <div class="org-meta-item">
+                                    <span>Portal followers:</span>
+                                    <span id="org-followers" class="stat-highlight"></span>
+                                </div>
+                                <div class="org-meta-item">
+                                    <span>Members:</span>
+                                    <span id="org-members" class="stat-highlight"></span>
+                                </div>
+                            </div>
+                            <div id="org-badges" style="margin-bottom: 10px;"></div>
+                            <div class="org-links" id="org-links"></div>
+                        </div>
                     </div>
+                    <div class="members-list" id="org-members-list"></div>
                 </div>
-                <div class="members-list" id="org-members-list"></div>
+            </div>
+
+            <!-- General Stats Section -->
+            <div class="section">
+                <h2 class="section-title">General Statistics</h2>
+                <div id="general-stats">
+                    <div class="stat-item"><strong>Total Datasets:</strong> <span id="total-datasets" class="stat-highlight">0</span></div>
+                    <div class="stat-item"><strong>Total Resources:</strong> <span id="total-resources" class="stat-highlight">0</span></div>
+                    <div class="stat-item"><strong>Unique Tags:</strong> <span id="unique-tags" class="stat-highlight">0</span></div>
+                    <div class="stat-item"><strong>Time Range:</strong> <span id="time-range" class="stat-highlight">-</span></div>
+                    <div class="stat-item"><strong>Avg. Resources per Dataset:</strong> <span id="avg-resources" class="stat-highlight">0</span></div>
+                    <div class="stat-item"><strong>Avg. Quality Score:</strong> <span id="avg-quality" class="stat-highlight">-</span></div>
+                    <div class="stat-item"><strong>Most Used License:</strong> <span id="top-license" class="stat-highlight">-</span></div>
+                </div>
             </div>
         </div>
 
-        <!-- General Stats Section -->
+        <!-- Reuses Section -->
         <div class="section">
-            <h2 class="section-title">General Statistics</h2>
-            <div id="loading" class="loading">Loading datasets...</div>
-            <div id="general-stats" style="display: none;">
-                <div class="stat-item"><strong>Total Datasets:</strong> <span id="total-datasets" class="stat-highlight">0</span></div>
-                <div class="stat-item"><strong>Total Resources:</strong> <span id="total-resources" class="stat-highlight">0</span></div>
-                <div class="stat-item"><strong>Unique Tags:</strong> <span id="unique-tags" class="stat-highlight">0</span></div>
-                <div class="stat-item"><strong>Time Range:</strong> <span id="time-range" class="stat-highlight">-</span></div>
-                <div class="stat-item"><strong>Avg. Resources per Dataset:</strong> <span id="avg-resources" class="stat-highlight">0</span></div>
+            <div class="section-title">
+                <h2 style="margin: 0;">Reuses</h2>
+                <span class="section-note">Self-declared by their authors on data.public.lu — actual reuse (e.g. via GBIF) is broader. Treat downloads as the leading reuse indicator.</span>
+            </div>
+            <div id="reuses-container"></div>
+        </div>
+
+        <!-- Quality distribution and top viewed datasets -->
+        <div class="grid-container">
+            <div class="section">
+                <h2 class="section-title">Data Quality Score Distribution
+                    <span class="section-note">Portal quality score per dataset (description, open format, coverage, documentation...)</span>
+                </h2>
+                <div class="chart-container-md"><canvas id="quality-chart"></canvas></div>
+            </div>
+            <div class="section">
+                <h2 class="section-title">Top 10 Most Viewed Datasets</h2>
+                <div class="chart-container-md"><canvas id="top-views-chart"></canvas></div>
             </div>
         </div>
+
+        <!-- Timeline charts -->
+        <div class="grid-container">
+            <div class="section">
+                <h2 class="section-title">Monthly Creation Timeline</h2>
+                <div class="chart-container-sm"><canvas id="combined-chart"></canvas></div>
+            </div>
+            <div class="section">
+                <h2 class="section-title">Maintenance Activity (Last Modified per Month)</h2>
+                <div class="chart-container-sm"><canvas id="updates-chart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- License and format distribution -->
+        <div class="grid-container">
+            <div class="section">
+                <h2 class="section-title">License Distribution</h2>
+                <div class="chart-container-sm"><canvas id="license-chart"></canvas></div>
+            </div>
+            <div class="section">
+                <h2 class="section-title">Resource Format Distribution</h2>
+                <div class="chart-container-sm"><canvas id="format-chart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Quality fix list -->
+        <div class="section">
+            <h2 class="section-title">Data Quality Fix List
+                <span class="section-note">The 10 lowest-scoring datasets on the portal quality indicator, with what to fix</span>
+            </h2>
+            <div id="fix-list"></div>
+        </div>
+
+        <!-- Tag Stats and Filtering Section -->
+        <div class="section">
+            <div class="section-title">
+                <h2 style="margin: 0;">Tags</h2>
+                <button id="toggle-all-tags" class="toggle-link">Show All Tags</button>
+            </div>
+            <div class="tag-controls">
+                <span><strong>Filter by tags (click to select):</strong></span>
+                <button id="clear-filters">Clear All Filters</button>
+            </div>
+            <div id="tag-stats">
+                <div id="tag-cloud" class="tag-cloud"></div>
+            </div>
+        </div>
+
+        <!-- Sorting and Filter Controls Section -->
+        <div class="section">
+            <h2 class="section-title">Controls</h2>
+            <div class="controls">
+                <div class="sort-options">
+                    <span><strong>Sort by:</strong></span>
+                    <select id="sort-select" aria-label="Sort datasets">
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="title-asc">Title (A-Z)</option>
+                        <option value="title-desc">Title (Z-A)</option>
+                        <option value="downloads">Most Downloads</option>
+                        <option value="views">Most Views</option>
+                        <option value="reuses">Most Reuses</option>
+                        <option value="modified">Recently Modified</option>
+                        <option value="stale">Least Recently Modified</option>
+                    </select>
+                </div>
+                <div class="sort-options">
+                    <span><strong>Show:</strong></span>
+                    <select id="display-select" aria-label="Filter display">
+                        <option value="all">All Datasets</option>
+                        <option value="with-thumbnail">Only with Thumbnails</option>
+                        <option value="without-thumbnail">Only without Thumbnails</option>
+                    </select>
+                </div>
+                <div class="sort-options">
+                    <span><strong>Search:</strong></span>
+                    <input type="search" id="search-input" class="search-input" placeholder="Title, tag or description..." aria-label="Search datasets">
+                </div>
+            </div>
+        </div>
+
+        <!-- Datasets List Section -->
+        <div id="datasets-container"></div>
+
+        <footer>
+            Data source: data.public.lu API (uData). Metrics are collected by the portal since each dataset's publication.
+            This page caches API responses for 10 minutes to be kind to the portal; use "Refresh Data" to force a reload.
+        </footer>
     </div>
-
-    <!-- Combined Chart Section -->
-    <div class="section">
-        <h2 class="section-title">Monthly Creation Timeline</h2>
-        <div class="chart-container">
-            <canvas id="combined-chart"></canvas>
-        </div>
-        <div class="chart-legend">
-            <div class="legend-item">
-                <div class="legend-color datasets-legend"></div>
-                <span>Datasets Created</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color resources-legend"></div>
-                <span>Resources Created</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tag Stats and Filtering Section -->
-    <div class="section">
-        <div class="section-title">
-            <h2 style="margin: 0;">Tags</h2>
-            <a id="toggle-all-tags" class="toggle-link">Show All Tags</a>
-        </div>
-        <div class="tag-controls">
-            <span><strong>Filter by tags (click to select):</strong></span>
-            <button id="clear-filters">Clear All Filters</button>
-        </div>
-        <div id="tag-stats">
-            <div id="tag-cloud" class="tag-cloud"></div>
-        </div>
-    </div>
-
-    <!-- Sorting and Filter Controls Section -->
-    <div class="section">
-        <h2 class="section-title">Controls</h2>
-        <div class="controls">
-            <div class="sort-options">
-                <span><strong>Sort by:</strong></span>
-                <select id="sort-select">
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                    <option value="title-asc">Title (A-Z)</option>
-                    <option value="title-desc">Title (Z-A)</option>
-                </select>
-            </div>
-            <div>
-                <span><strong>Show:</strong></span>
-                <select id="display-select">
-                    <option value="all">All Datasets</option>
-                    <option value="with-thumbnail">Only with Thumbnails</option>
-                    <option value="without-thumbnail">Only without Thumbnails</option>
-                </select>
-            </div>
-        </div>
-    </div>
-
-    <!-- Datasets List Section -->
-    <div id="datasets-container"></div>
-
     <script>
-        // Global variables
+        // Configuration
+        const API = 'https://data.public.lu/api/1';
+        const ORG_ID = '57b5a8f16cd58279b1e2a86b';
+        const CACHE_KEY = 'mnhnl_datapublic_dashboard_cache_v1';
+        const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+        const STALE_DAYS = 730; // flag datasets not updated for 2+ years
+
+        // Global state
         let allDatasets = [];
-        let allResources = [];
+        let reuses = [];
+        let orgData = null;
         let tagCounts = {};
-        let datasetCreationDates = [];
-        let resourceCreationDates = [];
         let activeTags = new Set();
         let sortOrder = 'newest';
         let showAllTags = false;
         let displayFilter = 'all';
-        let orgData = null;
+        let searchTerm = '';
+        let dataTimestamp = null;
+        const charts = {};
 
-        // Fetch organization data
-        async function fetchOrgData() {
-            try {
-                const response = await fetch('https://data.public.lu/api/1/organizations/57b5a8f16cd58279b1e2a86b/');
-                orgData = await response.json();
-                renderOrgInfo();
-            } catch (error) {
-                console.error('Error fetching organization data:', error);
-                document.getElementById('org-loading').textContent = 'Failed to load organization information.';
-            }
+        // Human-readable labels for failing quality flags
+        const FLAG_LABELS = {
+            all_resources_available: 'Some resources unavailable',
+            dataset_description_quality: 'Weak description',
+            has_open_format: 'No open format',
+            has_resources: 'No resources',
+            license: 'No license',
+            resources_documentation: 'Resources not documented',
+            spatial: 'No spatial coverage',
+            temporal_coverage: 'No temporal coverage',
+            update_frequency: 'No update frequency'
+        };
+
+        const LICENSE_LABELS = {
+            'not-set': 'Not set',
+            'cc-zero': 'CC0',
+            'cc-by': 'CC-BY',
+            'cc-by-sa': 'CC-BY-SA',
+            'odc-by': 'ODC-BY',
+            'odbl': 'ODbL',
+            'other-open': 'Other open',
+            'other': 'Other'
+        };
+
+        const PALETTE = ['#3498db', '#9b59b6', '#e67e22', '#27ae60', '#e74c3c', '#16a085', '#f39c12', '#7f8c8d', '#2980b9', '#d35400'];
+
+        // ---------- API helpers ----------
+
+        async function fetchJSON(url) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+            return response.json();
         }
 
-        // Render organization information
+        async function fetchPaginated(url) {
+            const items = [];
+            let next = url;
+            let pages = 0;
+            // Use the API's next_page links; guard against runaway loops.
+            while (next && pages < 50) {
+                const data = await fetchJSON(next);
+                items.push(...(data.data || []));
+                next = data.next_page;
+                pages++;
+            }
+            return items;
+        }
+
+        // ---------- Caching (be kind to the API) ----------
+
+        function loadCache() {
+            try {
+                const cached = JSON.parse(localStorage.getItem(CACHE_KEY));
+                if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) return cached;
+            } catch (e) { /* file:// or privacy mode: cache unavailable */ }
+            return null;
+        }
+
+        function saveCache(org, datasets, reuseList) {
+            try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify({
+                    ts: Date.now(), org, datasets, reuses: reuseList
+                }));
+            } catch (e) { /* cache unavailable, ignore */ }
+        }
+
+        function clearCache() {
+            try { localStorage.removeItem(CACHE_KEY); } catch (e) { /* ignore */ }
+        }
+
+        // ---------- Data preparation ----------
+
+        function prepareData() {
+            tagCounts = {};
+            allDatasets.forEach(dataset => {
+                dataset._createdDate = new Date(dataset.internal?.created_at_internal || dataset.created_at);
+                dataset._updatedDate = dataset.last_update ? new Date(dataset.last_update) : null;
+                dataset._downloads = dataset.metrics?.resources_downloads || 0;
+                dataset._views = dataset.metrics?.views || 0;
+                dataset._reuses = dataset.metrics?.reuses || 0;
+                dataset._followers = dataset.metrics?.followers || 0;
+                dataset._discussions = dataset.metrics?.discussions || 0;
+                dataset._quality = (dataset.quality && typeof dataset.quality.score === 'number')
+                    ? dataset.quality.score : null;
+                dataset._staleDays = dataset._updatedDate
+                    ? Math.floor((Date.now() - dataset._updatedDate.getTime()) / 86400000) : null;
+                dataset._failingFlags = dataset.quality
+                    ? Object.keys(FLAG_LABELS).filter(key => dataset.quality[key] === false)
+                    : [];
+                dataset.tags.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                });
+            });
+        }
+
+        function failingFlagLabels(dataset) {
+            return dataset._failingFlags.map(key => FLAG_LABELS[key]);
+        }
+
+        // ---------- Loading ----------
+
+        function showError(message) {
+            const banner = document.getElementById('error-banner');
+            document.getElementById('error-message').textContent = message;
+            banner.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('error-banner').classList.remove('show');
+        }
+
+        async function loadAll() {
+            const cached = loadCache();
+            if (cached) {
+                orgData = cached.org;
+                allDatasets = cached.datasets;
+                reuses = cached.reuses;
+                dataTimestamp = cached.ts;
+                return;
+            }
+
+            const [orgResult, datasetsResult, reusesResult] = await Promise.allSettled([
+                fetchJSON(`${API}/organizations/${ORG_ID}/`),
+                fetchPaginated(`${API}/datasets/?page_size=100&organization=${ORG_ID}`),
+                fetchPaginated(`${API}/reuses/?page_size=100&organization=${ORG_ID}`)
+            ]);
+
+            if (datasetsResult.status === 'rejected') {
+                throw new Error('Failed to load datasets from data.public.lu: ' + datasetsResult.reason);
+            }
+            if (orgResult.status === 'rejected') console.error('Org fetch failed:', orgResult.reason);
+            if (reusesResult.status === 'rejected') console.error('Reuses fetch failed:', reusesResult.reason);
+
+            orgData = orgResult.status === 'fulfilled' ? orgResult.value : null;
+            allDatasets = datasetsResult.value;
+            reuses = reusesResult.status === 'fulfilled' ? reusesResult.value : [];
+            dataTimestamp = Date.now();
+            saveCache(orgData, allDatasets, reuses);
+        }
+
+        // ---------- Rendering: KPIs and general stats ----------
+
+        function renderKPIs() {
+            const totals = allDatasets.reduce((acc, d) => {
+                acc.downloads += d._downloads;
+                acc.views += d._views;
+                acc.reuses += d._reuses;
+                acc.followers += d._followers;
+                acc.discussions += d._discussions;
+                acc.resources += d.resources.length;
+                return acc;
+            }, {downloads: 0, views: 0, reuses: 0, followers: 0, discussions: 0, resources: 0});
+
+            const staleCount = allDatasets.filter(d => d._staleDays !== null && d._staleDays > STALE_DAYS).length;
+
+            document.getElementById('kpi-datasets').textContent = allDatasets.length.toLocaleString();
+            document.getElementById('kpi-resources').textContent = totals.resources.toLocaleString();
+            document.getElementById('kpi-downloads').textContent = totals.downloads.toLocaleString();
+            document.getElementById('kpi-views').textContent = totals.views.toLocaleString();
+            document.getElementById('kpi-reuses').textContent = totals.reuses.toLocaleString();
+            document.getElementById('kpi-followers').textContent = totals.followers.toLocaleString();
+            document.getElementById('kpi-discussions').textContent = totals.discussions.toLocaleString();
+            document.getElementById('kpi-stale').textContent = staleCount.toLocaleString();
+
+            // General statistics panel
+            const createdDates = allDatasets.map(d => d._createdDate);
+            const minDate = createdDates.length ? new Date(Math.min(...createdDates)) : null;
+            const maxDate = createdDates.length ? new Date(Math.max(...createdDates)) : null;
+            const qualityScores = allDatasets.filter(d => d._quality !== null).map(d => d._quality);
+            const licenseCounts = {};
+            allDatasets.forEach(d => {
+                const key = d.license || 'not-set';
+                licenseCounts[key] = (licenseCounts[key] || 0) + 1;
+            });
+            const topLicenseEntry = Object.entries(licenseCounts).sort((a, b) => b[1] - a[1])[0];
+            const topLicense = topLicenseEntry
+                ? `${LICENSE_LABELS[topLicenseEntry[0]] || topLicenseEntry[0]} (${topLicenseEntry[1]} datasets)` : '-';
+
+            document.getElementById('total-datasets').textContent = allDatasets.length;
+            document.getElementById('total-resources').textContent = totals.resources;
+            document.getElementById('unique-tags').textContent = Object.keys(tagCounts).length;
+            document.getElementById('time-range').textContent = minDate && maxDate
+                ? `${minDate.toLocaleDateString()} to ${maxDate.toLocaleDateString()}` : '-';
+            document.getElementById('avg-resources').textContent =
+                allDatasets.length > 0 ? (totals.resources / allDatasets.length).toFixed(1) : '0';
+            document.getElementById('avg-quality').textContent = qualityScores.length > 0
+                ? `${Math.round((qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length) * 100)}%` : '-';
+            document.getElementById('top-license').textContent = topLicense;
+
+            document.getElementById('as-of').textContent =
+                `Data as of ${new Date(dataTimestamp).toLocaleString()}`;
+        }
+
+        // ---------- Rendering: organization ----------
+
         function renderOrgInfo() {
-            if (!orgData) return;
+            if (!orgData) {
+                document.getElementById('org-loading').textContent = 'Failed to load organization information.';
+                return;
+            }
 
             document.getElementById('org-loading').style.display = 'none';
             document.getElementById('org-info').style.display = 'block';
 
-            // Set basic info
             document.getElementById('org-logo').src = orgData.logo;
             document.getElementById('org-name').textContent = orgData.name;
             document.getElementById('org-acronym').textContent = orgData.acronym;
-            document.getElementById('org-datasets').textContent = orgData.metrics.datasets;
+            document.getElementById('org-followers').textContent = orgData.metrics.followers;
             document.getElementById('org-members').textContent = orgData.metrics.members;
 
             // Add badges
@@ -612,71 +1089,84 @@
             }
         }
 
-        // Fetch all datasets (handling pagination)
-        async function fetchAllDatasets() {
-            let page = 1;
-            let totalDatasets = 0;
-            let totalResources = 0;
-            let hasMore = true;
-            let minDate = new Date();
-            let maxDate = new Date(0);
+        // ---------- Rendering: reuses ----------
 
-            while (hasMore) {
-                const response = await fetch(`https://data.public.lu/api/1/datasets/?page=${page}&page_size=100&organization=57b5a8f16cd58279b1e2a86b`);
-                const data = await response.json();
+        function renderReuses() {
+            const container = document.getElementById('reuses-container');
+            container.innerHTML = '';
 
-                if (data.data.length === 0) {
-                    hasMore = false;
-                    break;
-                }
-
-                allDatasets = allDatasets.concat(data.data);
-                totalDatasets += data.data.length;
-
-                data.data.forEach(dataset => {
-                    const datasetDate = dataset.internal?.created_at_internal
-                        ? new Date(dataset.internal.created_at_internal)
-                        : new Date(dataset.created_at);
-
-                    // Update time range
-                    if (datasetDate < minDate) minDate = datasetDate;
-                    if (datasetDate > maxDate) maxDate = datasetDate;
-
-                    datasetCreationDates.push(datasetDate);
-                    dataset._parsedDate = datasetDate;
-
-                    dataset.tags.forEach(tag => {
-                        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-                    });
-
-                    dataset.resources.forEach(resource => {
-                        const resourceDate = new Date(resource.created_at);
-                        allResources.push({
-                            title: resource.title,
-                            format: resource.format,
-                            created_at: resourceDate,
-                            url: resource.url,
-                            datasetTitle: dataset.title
-                        });
-                        totalResources++;
-                        resourceCreationDates.push(resourceDate);
-                    });
-                });
-
-                page++;
+            if (reuses.length === 0) {
+                container.innerHTML = '<div class="loading">No reuses registered for this organization (yet).</div>';
+                return;
             }
 
-            return {
-                totalDatasets,
-                totalResources,
-                minDate: minDate.toLocaleDateString(),
-                maxDate: maxDate.toLocaleDateString()
-            };
+            reuses.forEach(reuse => {
+                const item = document.createElement('div');
+                item.className = 'reuse-item';
+
+                if (reuse.image) {
+                    const img = document.createElement('img');
+                    img.className = 'reuse-image';
+                    img.src = reuse.image;
+                    img.alt = reuse.title;
+                    img.loading = 'lazy';
+                    item.appendChild(img);
+                }
+
+                const info = document.createElement('div');
+                info.className = 'reuse-info';
+
+                const title = document.createElement('div');
+                title.className = 'reuse-title';
+                const titleLink = document.createElement('a');
+                titleLink.href = reuse.page;
+                titleLink.target = '_blank';
+                titleLink.textContent = reuse.title;
+                title.appendChild(titleLink);
+                info.appendChild(title);
+
+                const meta = document.createElement('div');
+                meta.className = 'reuse-meta';
+                const created = reuse.created_at ? new Date(reuse.created_at).toLocaleDateString() : '-';
+                const typeBadge = document.createElement('span');
+                typeBadge.className = 'reuse-type';
+                typeBadge.textContent = reuse.type || 'unknown type';
+                meta.appendChild(typeBadge);
+                meta.appendChild(document.createTextNode(`Declared ${created}`));
+                if (reuse.url) {
+                    const ext = document.createElement('a');
+                    ext.href = reuse.url;
+                    ext.target = '_blank';
+                    ext.style.color = '#2980b9';
+                    ext.style.marginLeft = '8px';
+                    ext.textContent = 'Open reuse';
+                    meta.appendChild(ext);
+                }
+                info.appendChild(meta);
+
+                if (reuse.datasets && reuse.datasets.length > 0) {
+                    const datasetsLine = document.createElement('div');
+                    datasetsLine.className = 'reuse-datasets';
+                    datasetsLine.appendChild(document.createTextNode('Uses: '));
+                    reuse.datasets.forEach((d, i) => {
+                        if (i > 0) datasetsLine.appendChild(document.createTextNode(', '));
+                        const a = document.createElement('a');
+                        a.href = d.page;
+                        a.target = '_blank';
+                        a.textContent = d.title;
+                        datasetsLine.appendChild(a);
+                    });
+                    info.appendChild(datasetsLine);
+                }
+
+                item.appendChild(info);
+                container.appendChild(item);
+            });
         }
 
-        // Find JPG resources in a dataset
+        // ---------- Rendering: dataset list ----------
+
         function findJpgResources(dataset) {
-            // Look for JPG or JPEG resources (case insensitive)
             const jpgResources = dataset.resources.filter(resource =>
                 resource.format &&
                 (resource.format.toLowerCase() === 'jpg' ||
@@ -685,61 +1175,88 @@
             return jpgResources.length > 0 ? jpgResources[0].url : null;
         }
 
-        // Format date as YYYY-MM for monthly grouping
-        function formatMonthYear(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            return `${year}-${month}`;
+        function createResourceDiv(resource) {
+            const resourceDiv = document.createElement('div');
+            resourceDiv.className = 'resource-item';
+
+            const resourceLink = document.createElement('a');
+            resourceLink.href = resource.url;
+            resourceLink.className = 'resource-link resource-title';
+            resourceLink.textContent = resource.title;
+            resourceLink.target = '_blank';
+
+            const formatSpan = document.createElement('span');
+            formatSpan.textContent = resource.format ? ` (${resource.format.toUpperCase()})` : '';
+            formatSpan.style.fontStyle = 'italic';
+
+            const resourceMeta = document.createElement('div');
+            resourceMeta.className = 'resource-meta';
+            resourceMeta.textContent = `Added: ${new Date(resource.created_at).toLocaleDateString()}`;
+
+            resourceDiv.appendChild(resourceLink);
+            resourceDiv.appendChild(formatSpan);
+            resourceDiv.appendChild(document.createElement('br'));
+            resourceDiv.appendChild(resourceMeta);
+            return resourceDiv;
         }
 
-        // Check if dataset matches display filter
         function matchesDisplayFilter(dataset) {
             if (displayFilter === 'all') return true;
-
             const hasThumbnail = findJpgResources(dataset) !== null;
-
             if (displayFilter === 'with-thumbnail') return hasThumbnail;
             if (displayFilter === 'without-thumbnail') return !hasThumbnail;
-
             return true;
         }
 
-        // Render datasets with filtering and sorting
+        function matchesSearch(dataset) {
+            if (!searchTerm) return true;
+            const haystack = [
+                dataset.title || '',
+                dataset.description || '',
+                dataset.tags.join(' ')
+            ].join(' ').toLowerCase();
+            return haystack.includes(searchTerm);
+        }
+
+        function sortDatasets(list) {
+            const sorted = [...list];
+            switch (sortOrder) {
+                case 'newest': sorted.sort((a, b) => b._createdDate - a._createdDate); break;
+                case 'oldest': sorted.sort((a, b) => a._createdDate - b._createdDate); break;
+                case 'title-asc': sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
+                case 'title-desc': sorted.sort((a, b) => b.title.localeCompare(a.title)); break;
+                case 'downloads': sorted.sort((a, b) => b._downloads - a._downloads); break;
+                case 'views': sorted.sort((a, b) => b._views - a._views); break;
+                case 'reuses': sorted.sort((a, b) => b._reuses - a._reuses); break;
+                case 'modified': sorted.sort((a, b) => (b._updatedDate || 0) - (a._updatedDate || 0)); break;
+                case 'stale': sorted.sort((a, b) => (a._updatedDate || 0) - (b._updatedDate || 0)); break;
+            }
+            return sorted;
+        }
+
         function renderDatasets() {
             const container = document.getElementById('datasets-container');
             container.innerHTML = '';
 
-            // Sort datasets
-            let sortedDatasets = [...allDatasets];
-
-            if (sortOrder === 'newest') {
-                sortedDatasets.sort((a, b) => b._parsedDate - a._parsedDate);
-            } else if (sortOrder === 'oldest') {
-                sortedDatasets.sort((a, b) => a._parsedDate - b._parsedDate);
-            } else if (sortOrder === 'title-asc') {
-                sortedDatasets.sort((a, b) => a.title.localeCompare(b.title));
-            } else if (sortOrder === 'title-desc') {
-                sortedDatasets.sort((a, b) => b.title.localeCompare(a.title));
-            }
+            const sortedDatasets = sortDatasets(allDatasets);
+            let visibleCount = 0;
 
             sortedDatasets.forEach(dataset => {
                 const matchesTagFilter = activeTags.size === 0 ||
                     dataset.tags.some(tag => activeTags.has(tag));
-
-                const matchesDisplay = matchesDisplayFilter(dataset);
+                const isVisible = matchesTagFilter && matchesDisplayFilter(dataset) && matchesSearch(dataset);
+                if (isVisible) visibleCount++;
 
                 const datasetDiv = document.createElement('div');
-                datasetDiv.className = `dataset ${matchesTagFilter && matchesDisplay ? 'visible' : ''}`;
+                datasetDiv.className = `dataset ${isVisible ? 'visible' : ''}`;
 
-                // Create content container with flex layout
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'dataset-content';
 
-                // Create info container (left column)
+                // Left column: info
                 const infoDiv = document.createElement('div');
                 infoDiv.className = 'dataset-info';
 
-                // Create title link
                 const titleLink = document.createElement('a');
                 titleLink.href = dataset.page;
                 titleLink.className = 'dataset-link';
@@ -749,15 +1266,29 @@
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'dataset-title';
                 titleDiv.appendChild(titleLink);
+
+                if (dataset._staleDays !== null && dataset._staleDays > STALE_DAYS) {
+                    const stale = document.createElement('span');
+                    stale.className = 'stale-badge';
+                    stale.textContent = `Not updated since ${dataset._updatedDate.toLocaleDateString()}`;
+                    titleDiv.appendChild(stale);
+                }
                 infoDiv.appendChild(titleDiv);
 
-                // Add metadata
                 const metaDiv = document.createElement('div');
                 metaDiv.className = 'dataset-meta';
-                metaDiv.textContent = `Created: ${dataset._parsedDate.toLocaleString()} | Tags: ${dataset.tags.join(', ')}`;
+                const updatedText = dataset._updatedDate
+                    ? ` | Last update: ${dataset._updatedDate.toLocaleDateString()}` : '';
+                metaDiv.textContent = `Created: ${dataset._createdDate.toLocaleDateString()}${updatedText} | Tags: ${dataset.tags.join(', ')}`;
                 infoDiv.appendChild(metaDiv);
 
-                // Add resources section
+                const statsDiv = document.createElement('div');
+                statsDiv.className = 'dataset-stats';
+                statsDiv.textContent =
+                    `Downloads: ${dataset._downloads} | Views: ${dataset._views} | Reuses: ${dataset._reuses}` +
+                    (dataset._quality !== null ? ` | Quality: ${Math.round(dataset._quality * 100)}%` : '');
+                infoDiv.appendChild(statsDiv);
+
                 const resourcesTitle = document.createElement('div');
                 resourcesTitle.textContent = 'Resources:';
                 resourcesTitle.style.marginTop = '8px';
@@ -765,37 +1296,42 @@
                 resourcesTitle.style.fontSize = '0.9em';
                 infoDiv.appendChild(resourcesTitle);
 
-                // Count resources
-                let resourceCount = 0;
+                const resourceCount = dataset.resources.length;
+                const MAX_VISIBLE_RESOURCES = 2;
 
-                dataset.resources.forEach(resource => {
-                    resourceCount++;
-
-                    const resourceDiv = document.createElement('div');
-                    resourceDiv.className = 'resource-item';
-
-                    const resourceLink = document.createElement('a');
-                    resourceLink.href = resource.url;
-                    resourceLink.className = 'resource-link resource-title';
-                    resourceLink.textContent = resource.title;
-                    resourceLink.target = '_blank';
-
-                    const formatSpan = document.createElement('span');
-                    formatSpan.textContent = resource.format ? ` (${resource.format.toUpperCase()})` : '';
-                    formatSpan.style.fontStyle = 'italic';
-
-                    const resourceMeta = document.createElement('div');
-                    resourceMeta.className = 'resource-meta';
-                    resourceMeta.textContent = `Added: ${new Date(resource.created_at).toLocaleDateString()}`;
-
-                    resourceDiv.appendChild(resourceLink);
-                    resourceDiv.appendChild(formatSpan);
-                    resourceDiv.appendChild(document.createElement('br'));
-                    resourceDiv.appendChild(resourceMeta);
-                    infoDiv.appendChild(resourceDiv);
+                dataset.resources.slice(0, MAX_VISIBLE_RESOURCES).forEach(resource => {
+                    infoDiv.appendChild(createResourceDiv(resource));
                 });
 
-                // Add thumbnail container (right column)
+                // Collapse the remaining resources behind a toggle to keep cards compact
+                if (resourceCount > MAX_VISIBLE_RESOURCES) {
+                    const hiddenCount = resourceCount - MAX_VISIBLE_RESOURCES;
+                    const moreLabel = `Show ${hiddenCount} more resource${hiddenCount !== 1 ? 's' : ''}`;
+                    const hideLabel = 'Hide additional resources';
+
+                    const extraDiv = document.createElement('div');
+                    extraDiv.style.display = 'none';
+                    dataset.resources.slice(MAX_VISIBLE_RESOURCES).forEach(resource => {
+                        extraDiv.appendChild(createResourceDiv(resource));
+                    });
+
+                    const moreToggle = document.createElement('button');
+                    moreToggle.className = 'toggle-link';
+                    moreToggle.style.marginTop = '6px';
+                    moreToggle.textContent = moreLabel;
+                    moreToggle.setAttribute('aria-expanded', 'false');
+                    moreToggle.addEventListener('click', () => {
+                        const expanded = extraDiv.style.display !== 'none';
+                        extraDiv.style.display = expanded ? 'none' : 'block';
+                        moreToggle.textContent = expanded ? moreLabel : hideLabel;
+                        moreToggle.setAttribute('aria-expanded', String(!expanded));
+                    });
+
+                    infoDiv.appendChild(extraDiv);
+                    infoDiv.appendChild(moreToggle);
+                }
+
+                // Right column: thumbnail
                 const thumbnailContainer = document.createElement('div');
                 thumbnailContainer.className = 'thumbnail-container';
 
@@ -805,6 +1341,7 @@
                     thumbnail.src = jpgUrl;
                     thumbnail.className = 'thumbnail';
                     thumbnail.alt = 'Dataset thumbnail';
+                    thumbnail.loading = 'lazy';
                     thumbnailContainer.appendChild(thumbnail);
                 } else {
                     const noThumbnail = document.createElement('div');
@@ -813,14 +1350,10 @@
                     thumbnailContainer.appendChild(noThumbnail);
                 }
 
-                // Combine columns in content container
                 contentDiv.appendChild(infoDiv);
                 contentDiv.appendChild(thumbnailContainer);
-
-                // Add content to dataset div
                 datasetDiv.appendChild(contentDiv);
 
-                // Add resource count badge
                 if (resourceCount > 0) {
                     const countBadge = document.createElement('div');
                     countBadge.style.position = 'absolute';
@@ -839,9 +1372,15 @@
                 container.appendChild(datasetDiv);
             });
 
-            // Show message if no datasets match filters
-            const visibleDatasets = container.querySelectorAll('.dataset.visible');
-            if (visibleDatasets.length === 0) {
+            const resultsInfo = document.createElement('div');
+            resultsInfo.style.textAlign = 'center';
+            resultsInfo.style.color = '#7f8c8d';
+            resultsInfo.style.fontSize = '0.9em';
+            resultsInfo.style.marginBottom = '10px';
+            resultsInfo.textContent = `${visibleCount} of ${allDatasets.length} datasets shown`;
+            container.appendChild(resultsInfo);
+
+            if (visibleCount === 0) {
                 const noResults = document.createElement('div');
                 noResults.style.padding = '20px';
                 noResults.style.textAlign = 'center';
@@ -852,49 +1391,32 @@
             }
         }
 
-        // Render statistics
-        function renderStats(totalDatasets, totalResources, timeRange) {
-            document.getElementById('total-datasets').textContent = totalDatasets;
-            document.getElementById('total-resources').textContent = totalResources;
-            document.getElementById('unique-tags').textContent = Object.keys(tagCounts).length;
-            document.getElementById('time-range').textContent = `${timeRange.minDate} to ${timeRange.maxDate}`;
-            document.getElementById('avg-resources').textContent =
-                totalDatasets > 0 ? (totalResources / totalDatasets).toFixed(1) : '0';
+        // ---------- Rendering: tags ----------
 
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('general-stats').style.display = 'block';
-
-            renderTagCloud();
-        }
-
-        // Render tag cloud with current filter
         function renderTagCloud() {
             const tagCloud = document.getElementById('tag-cloud');
             tagCloud.innerHTML = '';
 
-            // Get all tags sorted by frequency
             const sortedTags = Object.entries(tagCounts)
                 .sort((a, b) => b[1] - a[1]);
 
-            // Filter tags based on showAllTags
             const tagsToShow = showAllTags ?
                 sortedTags :
-                sortedTags.filter(([tag, count]) => count >= 5);
+                sortedTags.filter(([, count]) => count >= 5);
 
             tagsToShow.forEach(([tag, count]) => {
-                const tagElement = document.createElement('div');
+                const tagElement = document.createElement('button');
                 tagElement.className = `tag ${activeTags.has(tag) ? 'active' : ''}`;
                 tagElement.textContent = `${tag} (${count})`;
+                tagElement.setAttribute('aria-pressed', activeTags.has(tag));
                 tagElement.onclick = () => toggleTagFilter(tag);
                 tagCloud.appendChild(tagElement);
             });
 
-            // Update toggle link text
             document.getElementById('toggle-all-tags').textContent =
                 showAllTags ? 'Show Only Popular Tags' : 'Show All Tags';
         }
 
-        // Toggle tag filter
         function toggleTagFilter(tag) {
             if (activeTags.has(tag)) {
                 activeTags.delete(tag);
@@ -905,72 +1427,66 @@
             renderTagCloud();
         }
 
-        // Clear all filters
         function clearFilters() {
             activeTags.clear();
             renderDatasets();
             renderTagCloud();
         }
 
-        // Toggle all tags display
         function toggleAllTags() {
             showAllTags = !showAllTags;
             renderTagCloud();
         }
 
-        // Create combined chart with both datasets and resources
-        function createCombinedChart() {
-            // Group dataset creation by month/year
-            const datasetMonthlyData = datasetCreationDates.reduce((acc, date) => {
-                const monthYear = formatMonthYear(date);
-                acc[monthYear] = (acc[monthYear] || 0) + 1;
-                return acc;
-            }, {});
+        // ---------- Charts ----------
 
-            // Group resource creation by month/year
-            const resourceMonthlyData = resourceCreationDates.reduce((acc, date) => {
-                const monthYear = formatMonthYear(date);
-                acc[monthYear] = (acc[monthYear] || 0) + 1;
-                return acc;
-            }, {});
+        function makeChart(canvasId, key, config) {
+            if (charts[key]) charts[key].destroy();
+            charts[key] = new Chart(document.getElementById(canvasId).getContext('2d'), config);
+        }
 
-            // Get all unique month/year combinations
-            const allMonths = new Set([
-                ...Object.keys(datasetMonthlyData),
-                ...Object.keys(resourceMonthlyData)
-            ]);
+        function formatMonthYear(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+        }
 
-            // Sort months chronologically
-            const sortedMonths = Array.from(allMonths).sort();
+        function monthLabel(monthYear) {
+            const [year, month] = monthYear.split('-');
+            const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'short' });
+            return `${monthName} ${year}`;
+        }
 
-            // Create labels (e.g., "Jan 2026")
-            const labels = sortedMonths.map(monthYear => {
-                const [year, month] = monthYear.split('-');
-                const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'short' });
-                return `${monthName} ${year}`;
+        function renderTimelineCharts() {
+            // Creation timeline: datasets created + resources created
+            const datasetMonthly = {};
+            const resourceMonthly = {};
+            allDatasets.forEach(d => {
+                const key = formatMonthYear(d._createdDate);
+                datasetMonthly[key] = (datasetMonthly[key] || 0) + 1;
+                d.resources.forEach(r => {
+                    const rKey = formatMonthYear(new Date(r.created_at));
+                    resourceMonthly[rKey] = (resourceMonthly[rKey] || 0) + 1;
+                });
             });
+            const allMonths = Array.from(new Set([...Object.keys(datasetMonthly), ...Object.keys(resourceMonthly)])).sort();
+            const creationLabels = allMonths.map(monthLabel);
 
-            // Prepare data for both datasets
-            const datasetData = sortedMonths.map(month => datasetMonthlyData[month] || 0);
-            const resourceData = sortedMonths.map(month => resourceMonthlyData[month] || 0);
-
-            // Create combined chart
-            const ctx = document.getElementById('combined-chart').getContext('2d');
-            new Chart(ctx, {
+            makeChart('combined-chart', 'combined', {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: creationLabels,
                     datasets: [
                         {
                             label: 'Datasets Created',
-                            data: datasetData,
+                            data: allMonths.map(m => datasetMonthly[m] || 0),
                             backgroundColor: 'rgba(52, 152, 219, 0.8)',
                             borderColor: 'rgba(52, 152, 219, 1)',
                             borderWidth: 1
                         },
                         {
                             label: 'Resources Created',
-                            data: resourceData,
+                            data: allMonths.map(m => resourceMonthly[m] || 0),
                             backgroundColor: 'rgba(155, 89, 182, 0.8)',
                             borderColor: 'rgba(155, 89, 182, 1)',
                             borderWidth: 1
@@ -981,79 +1497,327 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+                        x: {
+                            title: { display: true, text: 'Month/Year', font: { weight: 'bold' } },
+                            ticks: { autoSkip: true, maxTicksLimit: 12, minRotation: 45 }
+                        },
                         y: {
                             beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Count',
-                                font: {
-                                    weight: 'bold'
-                                }
-                            },
-                            ticks: {
-                                precision: 0
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Month/Year',
-                                font: {
-                                    weight: 'bold'
-                                }
-                            },
-                            ticks: {
-                                autoSkip: true,
-                                maxTicksLimit: 12,
-                                minRotation: 45
-                            }
+                            title: { display: true, text: 'Count', font: { weight: 'bold' } },
+                            ticks: { precision: 0 }
                         }
                     },
                     plugins: {
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.raw}`;
-                                }
-                            },
-                            displayColors: false,
-                            backgroundColor: 'rgba(0,0,0,0.8)',
-                            titleFont: {
-                                weight: 'bold'
-                            }
+                        tooltip: { mode: 'index', intersect: false },
+                        legend: { position: 'top', labels: { boxWidth: 12, padding: 15, usePointStyle: true } }
+                    }
+                }
+            });
+
+            // Maintenance timeline: last update per month
+            const updateMonthly = {};
+            allDatasets.forEach(d => {
+                if (d._updatedDate) {
+                    const key = formatMonthYear(d._updatedDate);
+                    updateMonthly[key] = (updateMonthly[key] || 0) + 1;
+                }
+            });
+            const updateMonths = Object.keys(updateMonthly).sort();
+
+            makeChart('updates-chart', 'updates', {
+                type: 'bar',
+                data: {
+                    labels: updateMonths.map(monthLabel),
+                    datasets: [{
+                        label: 'Datasets Modified',
+                        data: updateMonths.map(m => updateMonthly[m] || 0),
+                        backgroundColor: 'rgba(39, 174, 96, 0.8)',
+                        borderColor: 'rgba(39, 174, 96, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Month/Year', font: { weight: 'bold' } },
+                            ticks: { autoSkip: true, maxTicksLimit: 12, minRotation: 45 }
                         },
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                boxWidth: 12,
-                                padding: 20,
-                                usePointStyle: true
-                            }
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Datasets modified', font: { weight: 'bold' } },
+                            ticks: { precision: 0 }
                         }
+                    },
+                    plugins: {
+                        legend: { display: false }
                     }
                 }
             });
         }
 
-        // Main function
-        async function main() {
-            // Fetch organization data and datasets in parallel
-            const [orgPromise, statsPromise] = await Promise.all([
-                fetchOrgData(),
-                fetchAllDatasets()
-            ]);
+        function truncate(text, max = 45) {
+            return text.length > max ? text.slice(0, max - 1) + '…' : text;
+        }
 
-            const stats = statsPromise;
-            renderDatasets();
-            renderStats(stats.totalDatasets, stats.totalResources, {
-                minDate: stats.minDate,
-                maxDate: stats.maxDate
+        function renderTopCharts() {
+            const topViews = allDatasets
+                .filter(d => d._views > 0)
+                .sort((a, b) => b._views - a._views)
+                .slice(0, 10)
+                .reverse();
+
+            const byTitle = new Map(allDatasets.map(d => [truncate(d.title), d.title]));
+            const horizontalOptions = {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { beginAtZero: true, ticks: { precision: 0 } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => byTitle.get(items[0].label) || items[0].label
+                        }
+                    }
+                }
+            };
+
+            makeChart('top-views-chart', 'topViews', {
+                type: 'bar',
+                data: {
+                    labels: topViews.map(d => truncate(d.title)),
+                    datasets: [{
+                        label: 'Views',
+                        data: topViews.map(d => d._views),
+                        backgroundColor: 'rgba(155, 89, 182, 0.8)',
+                        borderColor: 'rgba(155, 89, 182, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: horizontalOptions
             });
-            createCombinedChart();
+        }
 
-            // Set up event listeners
+        function renderDistributionCharts() {
+            // License distribution
+            const licenseCounts = {};
+            allDatasets.forEach(d => {
+                const key = d.license || 'not-set';
+                licenseCounts[key] = (licenseCounts[key] || 0) + 1;
+            });
+            const licenseEntries = Object.entries(licenseCounts).sort((a, b) => b[1] - a[1]);
+
+            makeChart('license-chart', 'license', {
+                type: 'doughnut',
+                data: {
+                    labels: licenseEntries.map(([key]) => LICENSE_LABELS[key] || key),
+                    datasets: [{
+                        data: licenseEntries.map(([, count]) => count),
+                        backgroundColor: PALETTE,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, usePointStyle: true } }
+                    }
+                }
+            });
+
+            // Resource format distribution (top 10 + other)
+            const formatCounts = {};
+            allDatasets.forEach(d => d.resources.forEach(r => {
+                const key = r.format ? r.format.toLowerCase() : 'other';
+                formatCounts[key] = (formatCounts[key] || 0) + 1;
+            }));
+            const formatEntries = Object.entries(formatCounts).sort((a, b) => b[1] - a[1]);
+            const topFormats = formatEntries.slice(0, 10);
+            const restCount = formatEntries.slice(10).reduce((sum, [, count]) => sum + count, 0);
+            if (restCount > 0) topFormats.push(['other', restCount]);
+
+            makeChart('format-chart', 'format', {
+                type: 'doughnut',
+                data: {
+                    labels: topFormats.map(([format]) => format.toUpperCase()),
+                    datasets: [{
+                        data: topFormats.map(([, count]) => count),
+                        backgroundColor: PALETTE,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, usePointStyle: true } }
+                    }
+                }
+            });
+
+            // Quality score distribution
+            const buckets = new Array(10).fill(0);
+            let noScore = 0;
+            allDatasets.forEach(d => {
+                if (d._quality === null) {
+                    noScore++;
+                } else {
+                    buckets[Math.min(9, Math.floor(d._quality * 10))]++;
+                }
+            });
+            const bucketLabels = buckets.map((_, i) => `${i * 10}–${(i + 1) * 10}%`);
+            if (noScore > 0) bucketLabels.push('No score');
+
+            makeChart('quality-chart', 'quality', {
+                type: 'bar',
+                data: {
+                    labels: bucketLabels,
+                    datasets: [{
+                        label: 'Datasets',
+                        data: [...buckets, ...(noScore > 0 ? [noScore] : [])],
+                        backgroundColor: 'rgba(230, 126, 34, 0.8)',
+                        borderColor: 'rgba(230, 126, 34, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Datasets' }, ticks: { precision: 0 } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderQualityFixList() {
+            const container = document.getElementById('fix-list');
+            container.innerHTML = '';
+
+            const worst = allDatasets
+                .filter(d => d._quality !== null)
+                .sort((a, b) => a._quality - b._quality)
+                .slice(0, 10);
+
+            if (worst.length === 0) {
+                container.innerHTML = '<div class="loading">No quality scores available.</div>';
+                return;
+            }
+
+            worst.forEach(dataset => {
+                const item = document.createElement('div');
+                item.className = 'fix-item';
+
+                const header = document.createElement('div');
+                header.className = 'fix-header';
+
+                const title = document.createElement('div');
+                title.className = 'fix-title';
+                const link = document.createElement('a');
+                link.href = dataset.page;
+                link.target = '_blank';
+                link.textContent = dataset.title;
+                title.appendChild(link);
+
+                const score = document.createElement('div');
+                score.className = 'fix-score';
+                score.textContent = `Quality: ${Math.round(dataset._quality * 100)}%`;
+
+                header.appendChild(title);
+                header.appendChild(score);
+                item.appendChild(header);
+
+                const flags = document.createElement('div');
+                flags.className = 'fix-flags';
+                failingFlagLabels(dataset).forEach(label => {
+                    const flag = document.createElement('span');
+                    flag.className = 'flag';
+                    flag.textContent = label;
+                    flags.appendChild(flag);
+                });
+                item.appendChild(flags);
+
+                container.appendChild(item);
+            });
+        }
+
+        // ---------- CSV export ----------
+
+        function exportCSV() {
+            const header = ['Title', 'Page', 'Created', 'Last update', 'Resources', 'Downloads',
+                'Views', 'Reuses', 'Followers', 'Discussions', 'Quality score', 'License', 'Days since update', 'Tags'];
+            const rows = allDatasets.map(d => [
+                d.title,
+                d.page,
+                d._createdDate.toISOString().slice(0, 10),
+                d._updatedDate ? d._updatedDate.toISOString().slice(0, 10) : '',
+                d.resources.length,
+                d._downloads,
+                d._views,
+                d._reuses,
+                d._followers,
+                d._discussions,
+                d._quality !== null ? Math.round(d._quality * 100) : '',
+                d.license || '',
+                d._staleDays !== null ? d._staleDays : '',
+                d.tags.join(';')
+            ]);
+            const csv = [header, ...rows]
+                .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mnhnl_datapublic_stats_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ---------- Main ----------
+
+        function renderAll() {
+            document.getElementById('main-loading').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+
+            renderKPIs();
+            renderOrgInfo();
+            renderReuses();
+            renderTopCharts();
+            renderTimelineCharts();
+            renderDistributionCharts();
+            renderQualityFixList();
+            renderTagCloud();
+            renderDatasets();
+        }
+
+        async function main(forceRefresh) {
+            hideError();
+            document.getElementById('main-loading').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+
+            if (forceRefresh) clearCache();
+
+            try {
+                await loadAll();
+            } catch (error) {
+                console.error(error);
+                document.getElementById('main-loading').style.display = 'none';
+                showError('Failed to load data from data.public.lu (' + error.message + ').');
+                return;
+            }
+
+            prepareData();
+            renderAll();
+        }
+
+        function setupEventListeners() {
             document.getElementById('sort-select').addEventListener('change', (e) => {
                 sortOrder = e.target.value;
                 renderDatasets();
@@ -1064,12 +1828,21 @@
                 renderDatasets();
             });
 
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                searchTerm = e.target.value.trim().toLowerCase();
+                renderDatasets();
+            });
+
             document.getElementById('clear-filters').addEventListener('click', clearFilters);
             document.getElementById('toggle-all-tags').addEventListener('click', toggleAllTags);
+            document.getElementById('refresh-btn').addEventListener('click', () => main(true));
+            document.getElementById('retry-btn').addEventListener('click', () => main(true));
+            document.getElementById('export-btn').addEventListener('click', exportCSV);
         }
 
         // Start the process
-        main().catch(console.error);
+        main(false);
+        setupEventListeners();
     </script>
 </body>
 </html>
