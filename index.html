@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>publicthings — tools &amp; pages</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d2420;--mut:#6b756e;--card:#fff;--bd:#dcdfd8;--ac:#2f6b4f;--ac2:#e6f0ea;--err:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#161a17;--fg:#e6eae6;--mut:#93a097;--card:#1e2420;--bd:#333c36;--ac:#6fc29a;--ac2:#243229;--err:#f2867e}}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:900px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:16px;margin:28px 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.sub{margin:0 0 18px;color:var(--mut)}
+.search{margin-bottom:6px}
+input{width:100%;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
+a.card{text-decoration:none;color:inherit;display:block;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px;transition:border-color .15s}
+a.card:hover{border-color:var(--ac)}
+.page-title{font-weight:600}
+.page-title .arrow{color:var(--ac);margin-right:8px}
+.page-path{display:block;font:12px ui-monospace,monospace;color:var(--mut);margin-top:2px;overflow-wrap:anywhere}
+.page-desc{display:block;font-size:13px;color:var(--mut);margin-top:4px}
+#status{margin:14px 0;font-size:13px;color:var(--mut)}
+#status.err{color:var(--err)}
+footer{margin-top:34px;font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>publicthings</h1>
+<p class="sub">Tools and pages published in this repository via GitHub Pages. The list is generated automatically from the repository contents.</p>
+<div class="search"><input id="q" type="search" placeholder="Filter pages…" aria-label="Filter pages"></div>
+<div id="status">Loading page list…</div>
+<div id="groups"></div>
+<footer>
+Pages are discovered live from <code>github.com/mnhn-paul/publicthings</code> via the GitHub API
+(60 requests/hour per visitor). If the API is rate-limited or offline, a built-in snapshot of the
+repository pages is used. Add a new <code>.html</code> file to the repository and it will appear here automatically.
+</footer>
+</main>
+<script>
+const OWNER='mnhn-paul', REPO='publicthings';
+// Snapshot used when the GitHub API is unavailable (rate limit, offline, …). Paths only;
+// titles and descriptions are always read from the pages themselves.
+const FALLBACK_PATHS=[
+  'Cungs-goobi-mets-viewer.html',
+  'data_public/MNHNL_dataPublic_dashboard.html',
+  'gbif IPT lux.html',
+  'kioskv2.html',
+  'mnhnl-checklists-overview.html',
+  'sktchtab-kiosk-mnhn.html'
+];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const prettyName=p=>p.split('/').pop().replace(/\.html?$/i,'').replace(/[-_]+/g,' ').replace(/\s+/g,' ').trim();
+
+async function discoverPaths(){
+  try{
+    const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/trees/HEAD?recursive=1`);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const paths=(d.tree||[]).filter(t=>t.type==='blob'&&/\.html?$/i.test(t.path)&&t.path.toLowerCase()!=='index.html').map(t=>t.path);
+    if(!paths.length) throw new Error('no HTML pages found in repository');
+    return {paths, live:true, truncated:!!d.truncated};
+  }catch(e){
+    return {paths:FALLBACK_PATHS, live:false, error:e};
+  }
+}
+
+async function pageMeta(path){
+  const meta={path, title:null, desc:''};
+  try{
+    const r=await fetch(encodeURI(path));
+    if(!r.ok) return meta;
+    const doc=new DOMParser().parseFromString(await r.text(),'text/html');
+    meta.title=doc.querySelector('title')?.textContent.trim().replace(/\s+/g,' ')
+      ||doc.querySelector('h1')?.textContent.trim();
+    meta.desc=doc.querySelector('meta[name="description"]')?.getAttribute('content')?.trim()
+      ||doc.querySelector('main > p, main > .sub')?.textContent.trim().slice(0,160)||'';
+  }catch(e){/* same-origin fetch failed; filename is used as title */}
+  return meta;
+}
+
+let allPages=[];
+
+function render(){
+  const q=$('#q').value.trim().toLowerCase();
+  const groups={};
+  allPages.filter(p=>{
+    if(!q) return true;
+    return (p.title||prettyName(p.path)).toLowerCase().includes(q)
+      ||p.path.toLowerCase().includes(q)
+      ||p.desc.toLowerCase().includes(q);
+  }).forEach(p=>{
+    const g=p.path.includes('/')?p.path.split('/')[0]:'(root)';
+    (groups[g]=groups[g]||[]).push(p);
+  });
+  const names=Object.keys(groups).sort((a,b)=>(a==='(root)')-(b==='(root)')||a.localeCompare(b));
+  $('#groups').innerHTML=names.map(g=>`<section><h2>${g==='(root)'?'Pages':'📁 '+esc(g)}</h2>`+
+    groups[g].map(p=>`<a class="card" href="${esc(encodeURI(p.path))}">
+      <span class="page-title"><span class="arrow">→</span>${esc(p.title||prettyName(p.path))}</span>
+      <span class="page-path">${esc(p.path)}</span>
+      ${p.desc?`<span class="page-desc">${esc(p.desc)}</span>`:''}
+    </a>`).join('')+'</section>').join('')
+    ||`<p class="sub">No pages match your filter.</p>`;
+}
+
+async function main(){
+  const {paths, live, truncated, error}=await discoverPaths();
+  const status=$('#status');
+  if(!live){
+    status.className='err';
+    status.textContent='GitHub API unavailable ('+error.message+') — showing a built-in snapshot of the repository pages.';
+  }else if(truncated){
+    status.textContent='Repository tree was truncated by the GitHub API; some pages may be missing.';
+  }else{
+    status.textContent='';
+  }
+  const metas=await Promise.allSettled(paths.map(pageMeta));
+  allPages=metas.map(m=>m.status==='fulfilled'?m.value:{path:'', title:null, desc:''}).filter(p=>p.path);
+  allPages.sort((a,b)=>a.path.localeCompare(b.path));
+  render();
+}
+$('#q').addEventListener('input',render);
+main();
+</script>
+</body>
+</html>
