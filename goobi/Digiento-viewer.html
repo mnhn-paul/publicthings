@@ -27,9 +27,6 @@
   .boxcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
   .boxcard .name { font-size:21px; font-weight:700; color:var(--accent); }
   .boxcard .count { color:var(--muted); font-size:13px; margin-top:4px; }
-  .boxcard .bar { height:4px; background:var(--line); border-radius:2px; margin-top:10px;
-                  overflow:hidden; }
-  .boxcard .bar > div { height:100%; background:var(--accent); }
   .boxcard .mosaic { display:flex; gap:4px; margin-top:10px; }
   .boxcard .mosaic img { width:44px; height:44px; object-fit:cover; border-radius:6px;
                          background:#e8e5da; display:block; }
@@ -39,13 +36,13 @@
               overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s;
               position:relative; }
   .unitcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
-  .donebadge { position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
-               background:var(--accent); color:#fff; font-size:13px; line-height:1;
+  .markbadge { position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
+               background:var(--mark); color:#fff; font-size:12px; line-height:1;
                display:flex; align-items:center; justify-content:center;
                box-shadow:0 1px 4px rgba(0,0,0,.3); }
-  .unitcard.done .ucard-label { color:var(--accent); }
-  .revbadge { background:var(--accent); color:#fff; font-size:12px; padding:2px 10px;
-              border-radius:12px; align-self:center; }
+  .unitcard.marked .ucard-label { color:var(--mark); }
+  .bkbadge { background:var(--mark); color:#fff; font-size:12px; padding:2px 10px;
+             border-radius:12px; align-self:center; }
   .ucard-thumb { height:120px; background:#e8e5da; display:flex; align-items:center;
                  justify-content:center; color:var(--muted); font-size:11.5px; }
   .ucard-thumb img { width:100%; height:100%; object-fit:contain; display:block; }
@@ -142,10 +139,11 @@ const MIRADOR = "https://face.mnhn.gov.lu/viewer/mirador/?manifest=";
 const cache = new Map();
 
 /* ---------- session persistence (localStorage) ---------- */
-const LS_UNITS = "mnhnl.units", LS_REVIEWED = "mnhnl.reviewed";
-let reviewed = new Set();
-try { reviewed = new Set(JSON.parse(localStorage.getItem(LS_REVIEWED) || "[]")); } catch {}
-const saveReviewed = () => localStorage.setItem(LS_REVIEWED, JSON.stringify([...reviewed]));
+const LS_UNITS = "mnhnl.units", LS_BOOKMARKS = "mnhnl.bookmarked";
+localStorage.removeItem("mnhnl.reviewed");            // removed "reviewed" feature
+let bookmarks = new Set();
+try { bookmarks = new Set(JSON.parse(localStorage.getItem(LS_BOOKMARKS) || "[]")); } catch {}
+const saveBookmarks = () => localStorage.setItem(LS_BOOKMARKS, JSON.stringify([...bookmarks]));
 function restoreUnits() {
   try {
     const arr = JSON.parse(localStorage.getItem(LS_UNITS) || "null");
@@ -321,11 +319,10 @@ function renderBoxes() {
   app.innerHTML = `<div class="boxes">` + names.map((b, i) => {
     const units = unitsIn(b);
     const n = units.length;
-    const r = units.filter(u => reviewed.has(u.id)).length;
+    const r = units.filter(u => bookmarks.has(u.id)).length;
     return `<div class="boxcard" onclick="openBoxIdx(${i})">
       <div class="name">${b}</div>
-      <div class="count">${n} unit${n > 1 ? "s" : ""} · ${r}/${n} reviewed</div>
-      <div class="bar"><div style="width:${n ? 100 * r / n : 0}%"></div></div>
+      <div class="count">${n} unit${n > 1 ? "s" : ""}${r ? ` · ${r} bookmarked` : ""}</div>
       <div class="mosaic" id="mosaic-${i}"></div></div>`;
   }).join("") + `</div>`;
   names.forEach((b, i) => fillMosaic(i, unitsIn(b).slice(0, 4)));
@@ -350,15 +347,15 @@ async function fillMosaic(i, units) {
 function renderList() {
   const b = route.box;
   const list = unitsIn(b);
-  const nDone = list.filter(u => reviewed.has(u.id)).length;
+  const nMarked = list.filter(u => bookmarks.has(u.id)).length;
   crumb.innerHTML = `<button class="backlink" onclick="go('boxes')">← All boxes</button> &nbsp;${b}`;
-  app.innerHTML = `<p style="margin:4px 0 10px">Select a specimen in ${b} — ${nDone}/${list.length} reviewed
+  app.innerHTML = `<p style="margin:4px 0 10px">Select a specimen in ${b}${nMarked ? ` — ${nMarked} bookmarked` : ""}
       (<button class="backlink" onclick="openBoxIndex(0)">start at the first one →</button>)</p>
     <div class="unitgrid">` + list.map((u, i) => {
-      const done = reviewed.has(u.id);
-      return `<div class="unitcard${done ? " done" : ""}" onclick="openBoxIndex(${i})">
+      const marked = bookmarks.has(u.id);
+      return `<div class="unitcard${marked ? " marked" : ""}" onclick="openBoxIndex(${i})">
          <div class="ucard-thumb" id="thumb-${i}">loading…</div>
-         ${done ? `<div class="donebadge">✓</div>` : ""}
+         ${marked ? `<div class="markbadge">★</div>` : ""}
          <div class="ucard-label">${i + 1}. &nbsp;${u.id}</div></div>`;
     }).join("") + `</div>`;
   loadThumbs(list);
@@ -396,7 +393,7 @@ function renderViewer() {
     <div class="viewer-top">
       <div class="pos">${box} — specimen ${idx + 1} of ${list.length}</div>
       <div class="unitlabel">${unit.id}</div>
-      <span class="revbadge" id="revBadge" style="display:${reviewed.has(unit.id) ? "inline-block" : "none"}">✓ reviewed</span>
+      <span class="bkbadge" id="bkBadge" style="display:${bookmarks.has(unit.id) ? "inline-block" : "none"}">★ bookmarked</span>
       <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador ↗</a>
     </div>
     <div class="progress"><div style="width:${100 * (idx + 1) / list.length}%"></div></div>
@@ -404,10 +401,10 @@ function renderViewer() {
     <div class="meta" id="metaBox"></div>
     <div class="controls">
       <button id="prev" ${idx === 0 ? "disabled" : ""} onclick="nav(-1)">◀ Prev</button>
-      <button class="ghost" id="markBtn" onclick="toggleReviewed()">${reviewed.has(unit.id) ? "✓ Reviewed — undo (M)" : "Mark reviewed (M)"}</button>
+      <button class="ghost" id="markBtn" onclick="toggleBookmark()">${bookmarks.has(unit.id) ? "★ Bookmarked — undo (B)" : "Bookmark (B)"}</button>
       <button id="next" ${idx === list.length - 1 ? "disabled" : ""} onclick="nav(1)">Next ▶</button>
     </div>
-    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · M mark reviewed · Esc reset zoom · ? all shortcuts · click image to zoom · drag or scroll to pan &amp; zoom</div>`;
+    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · B bookmark · Esc reset zoom · ? all shortcuts · click image to zoom · drag or scroll to pan &amp; zoom</div>`;
   loadUnit(unit);
   const nx = list[idx + 1];
   if (nx) getManifest(nx.id).catch(() => {});   // prefetch next specimen
@@ -639,18 +636,18 @@ window.cycleImage = d => {
   showPage();
 };
 
-/* ---------- reviewed state ---------- */
+/* ---------- bookmarked state ---------- */
 
-window.toggleReviewed = () => {
+window.toggleBookmark = () => {
   if (route.view !== "viewer") return;
   const unit = unitsIn(route.box)[route.idx];
   if (!unit) return;
-  if (reviewed.has(unit.id)) reviewed.delete(unit.id); else reviewed.add(unit.id);
-  saveReviewed();
-  const on = reviewed.has(unit.id);
+  if (bookmarks.has(unit.id)) bookmarks.delete(unit.id); else bookmarks.add(unit.id);
+  saveBookmarks();
+  const on = bookmarks.has(unit.id);
   const btn = document.getElementById("markBtn");
-  if (btn) btn.textContent = on ? "✓ Reviewed — undo (M)" : "Mark reviewed (M)";
-  const badge = document.getElementById("revBadge");
+  if (btn) btn.textContent = on ? "★ Bookmarked — undo (B)" : "Bookmark (B)";
+  const badge = document.getElementById("bkBadge");
   if (badge) badge.style.display = on ? "inline-block" : "none";
 };
 
@@ -670,7 +667,7 @@ window.toggleHelp = () => {
   [["→ / Space", "next specimen"],
    ["←", "previous specimen"],
    ["↑ / ↓", "previous / next image of this specimen"],
-   ["M", "mark current specimen as reviewed (toggle)"],
+   ["B", "bookmark current specimen for later checking (toggle)"],
    ["+ / −", "zoom in / out"],
    ["Esc", "reset zoom / close this help"],
    ["?", "toggle this help"],
@@ -706,7 +703,7 @@ document.addEventListener("keydown", e => {
   else if (e.key === "ArrowLeft") nav(-1);
   else if (e.key === "ArrowUp") { e.preventDefault(); cycleImage(-1); }
   else if (e.key === "ArrowDown") { e.preventDefault(); cycleImage(1); }
-  else if (e.key === "m" || e.key === "M") toggleReviewed();
+  else if (e.key === "b" || e.key === "B") toggleBookmark();
   else if ((e.key === "+" || e.key === "=") && stageZoomAt) {
     const r = document.getElementById("stage").getBoundingClientRect();
     stageZoomAt(zoom.scale * 1.35, r.left + r.width / 2, r.top + r.height / 2);
