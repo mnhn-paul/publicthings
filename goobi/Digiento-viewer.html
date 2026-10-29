@@ -44,10 +44,12 @@
   .progress { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-bottom:14px; }
   .progress > div { height:100%; background:var(--accent); width:0; transition:width .2s; }
   .stage { background:#23282a; border-radius:10px; min-height:60vh; display:flex;
-           align-items:center; justify-content:center; position:relative; overflow:hidden; }
-  .stage img { max-width:100%; max-height:78vh; display:block; cursor:zoom-in; }
-  .stage.zoomed { overflow:auto; align-items:flex-start; justify-content:flex-start; }
-  .stage img.zoomed { max-width:none; max-height:none; cursor:zoom-out; }
+           align-items:center; justify-content:center; position:relative; overflow:hidden;
+           touch-action:none; }
+  .pageimg { max-width:100%; max-height:78vh; display:block; cursor:zoom-in;
+             transform-origin:center center; user-select:none; -webkit-user-drag:none; }
+  .stage.zoomed .pageimg { cursor:grab; }
+  .stage.zoomed .pageimg:active { cursor:grabbing; }
   .loading,.error { color:#fff; padding:30px; text-align:center; }
   .error a { color:var(--accent2); }
   .strip { position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
@@ -57,7 +59,7 @@
                 border:2px solid transparent; background:#444; }
   .strip .dot.active { border-color:var(--accent2); }
 
-  /* side arrows for cycling images of one specimen (wide screens) */
+  /* side arrows: previous / next specimen (wide screens) */
   .sidearrow { position:absolute; top:50%; transform:translateY(-50%); width:46px; height:46px;
                padding:0; border-radius:50%; background:rgba(0,0,0,.55); color:#fff;
                font-size:18px; line-height:1; display:flex; align-items:center;
@@ -65,11 +67,20 @@
   .sidearrow:hover { background:var(--accent); }
   .sidearrow.left { left:14px; }
   .sidearrow.right { right:14px; }
-  .stage.zoomed .sidearrow { display:none; }
-  /* bottom image buttons remain as fallback on narrow screens */
-  .imgbtn.off { display:none !important; }
-  @media (min-width:701px) { .imgbtn { display:none !important; } }
-  @media (max-width:700px)  { .sidearrow { display:none; } }
+  .sidearrow:disabled { background:rgba(0,0,0,.30); color:#9aa39d; cursor:not-allowed; }
+  @media (max-width:700px) { .sidearrow { display:none; } }
+
+  /* zoom toolbar (top-right of the image) */
+  .zoombar { position:absolute; top:10px; right:10px; display:flex; gap:6px; }
+  .zoombar button { width:36px; height:36px; padding:0; border-radius:50%;
+                    background:rgba(0,0,0,.55); color:#fff; font-size:16px; line-height:1; }
+  .zoombar button:hover { background:var(--accent); }
+
+  /* image-cycle chevrons flanking the thumbnail strip */
+  .strip .chev { width:30px; height:30px; padding:0; border:0; border-radius:50%;
+                 background:transparent; color:#fff; font-size:13px; cursor:pointer;
+                 align-self:center; }
+  .strip .chev:hover { background:rgba(255,255,255,.25); }
 
   .controls { display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
   button { background:var(--accent); color:#fff; border:0; border-radius:8px;
@@ -255,11 +266,9 @@ function renderViewer() {
     <div class="stage" id="stage"><div class="loading" id="msg">Loading…</div></div>
     <div class="controls">
       <button id="prev" ${idx === 0 ? "disabled" : ""} onclick="nav(-1)">◀ Prev</button>
-      <button class="ghost imgbtn off" id="prevImg" onclick="cycleImage(-1)">◀ Prev image</button>
-      <button class="ghost imgbtn off" id="nextImg" onclick="cycleImage(1)">Next image ▶</button>
       <button id="next" ${idx === list.length - 1 ? "disabled" : ""} onclick="nav(1)">Next ▶</button>
     </div>
-    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · click image to zoom</div>`;
+    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · Esc reset zoom · click image to zoom · drag or scroll to pan &amp; zoom</div>`;
   loadUnit(unit);
   const nx = list[idx + 1];
   if (nx) getManifest(nx.id).catch(() => {});   // prefetch next specimen
@@ -268,6 +277,7 @@ function renderViewer() {
 async function loadUnit(unit) {
   const stage = document.getElementById("stage");
   curPage = 0;
+  applyZoom = null; stageZoomAt = null;
   stage.innerHTML = `<div class="loading">Loading ${unit.id}…</div>`;
   try {
     const m = await getManifest(unit.id);
@@ -278,37 +288,135 @@ async function loadUnit(unit) {
     curPages = [];
     stage.innerHTML = `<div class="error">Could not load images for ${unit.id} (${e.message}).<br>
       Try the <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador viewer</a> directly.</div>`;
-    document.getElementById("prevImg").classList.add("off");
-    document.getElementById("nextImg").classList.add("off");
   }
 }
+
+/* ---------- pan & zoom ---------- */
+
+let zoom = { scale: 1, tx: 0, ty: 0 };   // zoom state of the current page
+let applyZoom = null, stageZoomAt = null;
 
 function showPage() {
   const stage = document.getElementById("stage");
   const p = curPages[curPage];
   stage.innerHTML = "";
+  zoom = { scale: 1, tx: 0, ty: 0 };
+  let hiRes = false;
+
   const img = document.createElement("img");
+  img.className = "pageimg";
   img.src = imgUrl(p, 1600);
   img.alt = "specimen image";
-  img.onclick = () => {
-    const z = stage.classList.toggle("zoomed");
-    img.classList.toggle("zoomed", z);
-    img.src = imgUrl(p, z ? 3000 : 1600);
-  };
+  img.draggable = false;
   stage.appendChild(img);
-  if (curPages.length > 1) {
-    [["left", -1, "◀"], ["right", 1, "▶"]].forEach(([side, dir, glyph]) => {
-      const b = document.createElement("button");
-      b.className = "sidearrow " + side;
-      b.textContent = glyph;
-      b.title = (dir < 0 ? "Previous" : "Next") + " image (" + (dir < 0 ? "↑" : "↓") + ")";
-      b.onclick = e => { e.stopPropagation(); cycleImage(dir); };
-      stage.appendChild(b);
-    });
-  }
+
+  applyZoom = () => {
+    // clamp panning so the image cannot leave the stage
+    const maxX = Math.max(0, (img.offsetWidth * zoom.scale - stage.clientWidth) / 2);
+    const maxY = Math.max(0, (img.offsetHeight * zoom.scale - stage.clientHeight) / 2);
+    zoom.tx = Math.min(maxX, Math.max(-maxX, zoom.tx));
+    zoom.ty = Math.min(maxY, Math.max(-maxY, zoom.ty));
+    img.style.transform = `translate(${zoom.tx}px, ${zoom.ty}px) scale(${zoom.scale})`;
+    stage.classList.toggle("zoomed", zoom.scale > 1.001);
+    if (zoom.scale > 1.4 && !hiRes) { hiRes = true; img.src = imgUrl(p, 3000); } // sharper tiles
+  };
+
+  // zoom to an absolute scale, keeping the point (cx,cy) fixed on screen
+  stageZoomAt = (ns, cx, cy) => {
+    const sr = stage.getBoundingClientRect();
+    const px = cx - sr.left - sr.width / 2, py = cy - sr.top - sr.height / 2;
+    ns = Math.min(6, Math.max(1, ns));
+    zoom.tx = px - (px - zoom.tx) * ns / zoom.scale;
+    zoom.ty = py - (py - zoom.ty) * ns / zoom.scale;
+    zoom.scale = ns;
+    applyZoom();
+  };
+  const zoomBy = (factor, cx, cy) => stageZoomAt(zoom.scale * factor, cx, cy);
+
+  // scroll wheel zooms toward the cursor
+  stage.addEventListener("wheel", e => {
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // drag to pan, pinch to zoom, click to zoom in / reset
+  const pts = new Map();
+  let drag = null, pinch = null;
+  img.addEventListener("pointerdown", e => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) drag = { x: e.clientX, y: e.clientY, tx: zoom.tx, ty: zoom.ty, moved: false };
+    else {
+      drag = null;
+      const [a, b] = [...pts.values()];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: zoom.scale };
+    }
+    img.setPointerCapture(e.pointerId);
+  });
+  img.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      stageZoomAt(pinch.scale * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist,
+                  (a.x + b.x) / 2, (a.y + b.y) / 2);
+    } else if (drag && zoom.scale > 1) {
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+      zoom.tx = drag.tx + dx; zoom.ty = drag.ty + dy;
+      applyZoom();
+    }
+  });
+  const pointerEnd = e => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size > 0) return;
+    const d = drag; drag = null;
+    if (!d || d.moved) return;
+    if (zoom.scale > 1) { zoom = { scale: 1, tx: 0, ty: 0 }; applyZoom(); }
+    else stageZoomAt(2.5, e.clientX, e.clientY);
+  };
+  img.addEventListener("pointerup", pointerEnd);
+  img.addEventListener("pointercancel", pointerEnd);
+
+  // zoom toolbar
+  const bar = document.createElement("div");
+  bar.className = "zoombar";
+  const center = () => { const r = stage.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  [["+", "Zoom in (+)", () => zoomBy(1.35, ...center())],
+   ["−", "Zoom out (−)", () => zoomBy(1 / 1.35, ...center())],
+   ["1:1", "Reset zoom (Esc)", () => { zoom = { scale: 1, tx: 0, ty: 0 }; applyZoom(); }]]
+   .forEach(([g, t, fn]) => {
+     const b = document.createElement("button");
+     b.textContent = g; b.title = t; b.onclick = fn;
+     bar.appendChild(b);
+   });
+  stage.appendChild(bar);
+
+  // side arrows: previous / next specimen
+  const list = unitsIn(route.box);
+  [["left", -1, "◀"], ["right", 1, "▶"]].forEach(([side, dir, glyph]) => {
+    const b = document.createElement("button");
+    b.className = "sidearrow " + side;
+    b.textContent = glyph;
+    b.title = (dir < 0 ? "Previous" : "Next") + " specimen (" + (dir < 0 ? "←" : "→") + ")";
+    b.disabled = (dir < 0 && route.idx === 0) || (dir > 0 && route.idx === list.length - 1);
+    b.onclick = e => { e.stopPropagation(); nav(dir); };
+    stage.appendChild(b);
+  });
+
+  // thumbnail strip with image-cycle chevrons
   if (curPages.length > 1) {
     const strip = document.createElement("div");
     strip.className = "strip";
+    const chev = (dir, glyph) => {
+      const b = document.createElement("button");
+      b.className = "chev";
+      b.textContent = glyph;
+      b.title = (dir < 0 ? "Previous" : "Next") + " image (" + (dir < 0 ? "↑" : "↓") + ")";
+      b.onclick = e => { e.stopPropagation(); cycleImage(dir); };
+      return b;
+    };
+    strip.appendChild(chev(-1, "◀"));
     curPages.forEach((pg, i) => {
       const t = document.createElement("img");
       t.className = "dot" + (i === curPage ? " active" : "");
@@ -317,11 +425,9 @@ function showPage() {
       t.onclick = () => { curPage = i; showPage(); };
       strip.appendChild(t);
     });
+    strip.appendChild(chev(1, "▶"));
     stage.appendChild(strip);
   }
-  const many = curPages.length > 1;
-  document.getElementById("prevImg").classList.toggle("off", !many);
-  document.getElementById("nextImg").classList.toggle("off", !many);
 }
 
 /* ---------- navigation ---------- */
@@ -351,6 +457,15 @@ document.addEventListener("keydown", e => {
   else if (e.key === "ArrowLeft") nav(-1);
   else if (e.key === "ArrowUp") { e.preventDefault(); cycleImage(-1); }
   else if (e.key === "ArrowDown") { e.preventDefault(); cycleImage(1); }
+  else if (e.key === "Escape" && applyZoom) { zoom = { scale: 1, tx: 0, ty: 0 }; applyZoom(); }
+  else if ((e.key === "+" || e.key === "=") && stageZoomAt) {
+    const r = document.getElementById("stage").getBoundingClientRect();
+    stageZoomAt(zoom.scale * 1.35, r.left + r.width / 2, r.top + r.height / 2);
+  }
+  else if (e.key === "-" && stageZoomAt) {
+    const r = document.getElementById("stage").getBoundingClientRect();
+    stageZoomAt(zoom.scale / 1.35, r.left + r.width / 2, r.top + r.height / 2);
+  }
 });
 
 function render() {
