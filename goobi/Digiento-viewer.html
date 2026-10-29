@@ -306,7 +306,9 @@ function renderPaste() {
         The box of each specimen is read from the
         <code>Storage location</code> metadata of its IIIF manifest;
         records without that field are placed in the “other” box.
-        Loaded records stay available until you press “Clear saved data”.</label>
+        Loaded records stay available until you press “Clear saved data”.<br>
+        Tip: a direct link like <code>…Digiento-viewer.html#id/MNHNL196155</code>
+        opens any record on the fly — no paste needed.</label>
       <textarea id="paste" placeholder="MNHNL190875&#10;MNHNL190876&#10;MNHNL122001 ..."></textarea>
       <div class="pastebar">
         <button onclick="loadPaste()">${hasData ? "Add units" : "Load units"}</button>
@@ -694,8 +696,33 @@ function setRoute(r) {
   else location.hash = h;            // hashchange listener renders
 }
 
+/* ---------- load-on-the-fly: #id/… links work without preloaded data ---------- */
+
+// make sure a record is in UNITS; fetch its manifest to get the box
+async function ensureLoaded(id) {
+  if (UNITS.some(u => u.id === id)) return;
+  const unit = { id };
+  UNITS.push(unit);
+  try { unit.box = boxOf(await getManifest(id)) || OTHER_BOX; }
+  catch { unit.box = OTHER_BOX; }    // viewer will show the load error
+  localStorage.setItem(LS_UNITS, JSON.stringify(UNITS));
+}
+
+async function openRecordUrl(id) {
+  crumb.textContent = "";
+  app.innerHTML = `<p style="text-align:center;color:var(--muted);padding:30px">Loading ${id}…</p>`;
+  await ensureLoaded(id);
+  route = validRoute({ view: "byid", id });
+  render();
+}
+
 window.addEventListener("hashchange", () => {
-  route = validRoute(hashToRoute(location.hash));
+  const r = hashToRoute(location.hash);
+  if (r.view === "byid" && !UNITS.some(u => u.id === r.id)) {
+    openRecordUrl(r.id);            // record not loaded yet → fetch it
+    return;
+  }
+  route = validRoute(r);
   render();
 });
 
@@ -804,13 +831,18 @@ function render() {
 
 /* ---------- boot: restore session, resolve boxes, follow the URL hash ---------- */
 (async () => {
-  if (restoreUnits()) {
-    if (UNITS.some(u => !u.box)) {            // saved before boxes were resolved
-      crumb.textContent = "";
-      app.innerHTML = `<p style="text-align:center;color:var(--muted);padding:30px">Reading boxes from manifests…</p>`;
-      await resolveBoxes(UNITS);
-    }
-    route = validRoute(location.hash ? hashToRoute(location.hash) : { view: "boxes" });
+  const restored = restoreUnits();
+  if (restored && UNITS.some(u => !u.box)) {         // saved before boxes were resolved
+    crumb.textContent = "";
+    app.innerHTML = `<p style="text-align:center;color:var(--muted);padding:30px">Reading boxes from manifests…</p>`;
+    await resolveBoxes(UNITS);
+  }
+  const hr = location.hash ? hashToRoute(location.hash) : null;
+  if (hr && hr.view === "byid" && !UNITS.some(u => u.id === hr.id)) {
+    await ensureLoaded(hr.id);                       // #id/… link → load on the fly
+  }
+  if (restored || (hr && hr.view === "byid")) {
+    route = validRoute(hr || { view: "boxes" });
     history.replaceState(null, "", routeToHash(route));
   } else {
     route = { view: "paste" };
