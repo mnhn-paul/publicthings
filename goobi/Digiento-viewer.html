@@ -203,15 +203,26 @@ function thumbOf(m) {
 
 /* ---------- manifest metadata ---------- */
 
-// IIIF metadata labels/values may be plain strings, {@value:…} maps or {lang:[…]} maps
-const asText = v => {
+// IIIF language values come as strings, {@value:…} maps, {lang:[…]} maps, or
+// arrays of {language, value} pairs — prefer English, then German, then any
+const LANGS = ["en", "de", "none"];
+const langText = v => {
   if (v == null) return "";
   if (typeof v === "string") return v.trim();
-  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join("; ");
+  if (Array.isArray(v)) {
+    if (v.length && v.every(e => e && typeof e === "object" && "@value" in e)) {
+      for (const l of LANGS) {                        // pick the preferred language
+        const hit = v.find(e => e["@language"] === l && langText(e["@value"]));
+        if (hit) return langText(hit["@value"]);
+      }
+      return (v.map(e => langText(e["@value"])).filter(Boolean))[0] || "";
+    }
+    return v.map(e => langText(e)).filter(Boolean).join("; ");
+  }
   if (typeof v === "object") {
-    if ("@value" in v) return asText(v["@value"]);
-    for (const key of ["none", "en", ...Object.keys(v)]) {
-      const t = asText(v[key]);
+    if ("@value" in v) return langText(v["@value"]);
+    for (const key of [...LANGS, ...Object.keys(v)]) {
+      const t = langText(v[key]);
       if (t) return t;
     }
   }
@@ -221,12 +232,12 @@ const asText = v => {
 // all metadata as readable label/value pairs
 function metaOf(m) {
   const md = Array.isArray(m.metadata) ? m.metadata : [];
-  return md.map(e => ({ label: asText(e && e.label), value: asText(e && e.value) }))
+  return md.map(e => ({ label: langText(e && e.label), value: langText(e && e.value) }))
            .filter(e => e.label);
 }
 
 // only these fields are shown under the image, in this order
-const KEEP_META = ["storage location", "md_processid", "node id"];
+const KEEP_META = ["storage location", "md_recordid", "md_processid"];
 const shownMetaOf = m => KEEP_META
   .map(k => metaOf(m).find(e => e.label.toLowerCase() === k))
   .filter(Boolean);
@@ -234,11 +245,11 @@ const shownMetaOf = m => KEEP_META
 // the box comes from the "Storage location" metadata field
 const OTHER_BOX = "other";
 const boxOf = m => {
-  const e = metaOf(m).find(e => /^storage\s*location$/i.test(e.label));
+  const e = metaOf(m).find(e => /^(storage\s*location|lagerort)$/i.test(e.label));
   return e && e.value.trim() ? e.value.trim() : null;
 };
 
-const nameOf = m => asText(m.label) ||
+const nameOf = m => langText(m.label) ||
   ((metaOf(m).find(e => /^md_recordid$/i.test(e.label)) || {}).value) || null;
 
 // fill in each unit's box from its manifest (missing → "other"), then persist
@@ -418,7 +429,7 @@ async function loadUnit(unit) {
   try {
     const m = await getManifest(unit.id);
     curPages = pagesOf(m);
-    const metaBox = document.getElementById("metaBox");   // storage location / process id / node id
+    const metaBox = document.getElementById("metaBox");   // storage location / record id / process id
     if (metaBox) {
       metaBox.innerHTML = "";
       shownMetaOf(m).forEach(({ label, value }) => {
