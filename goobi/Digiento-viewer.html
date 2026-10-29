@@ -6,7 +6,7 @@
 <title>MNHNL Specimen Browser</title>
 <style>
   :root { --bg:#f4f2ec; --panel:#fff; --ink:#24312b; --muted:#6b7a72;
-          --accent:#2e6e4e; --accent2:#8fbc9f; --line:#e0ddd2; }
+          --accent:#2e6e4e; --accent2:#8fbc9f; --line:#e0ddd2; --mark:#b4770f; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
          background:var(--bg); color:var(--ink); }
@@ -150,7 +150,8 @@ function restoreUnits() {
   try {
     const arr = JSON.parse(localStorage.getItem(LS_UNITS) || "null");
     if (Array.isArray(arr) && arr.length &&
-        arr.every(u => u && typeof u.id === "string" && typeof u.box === "string")) {
+        arr.every(u => u && typeof u.id === "string" &&
+                       (u.box == null || typeof u.box === "string"))) {
       UNITS = arr;
       return true;
     }
@@ -202,14 +203,59 @@ function thumbOf(m) {
   return pages.length ? imgUrl(pages[0], 160) : null;
 }
 
-/* manifest metadata: label/value pairs */
+/* ---------- manifest metadata ---------- */
+
+// IIIF metadata labels/values may be plain strings, {@value:…} maps or {lang:[…]} maps
+const asText = v => {
+  if (v == null) return "";
+  if (typeof v === "string") return v.trim();
+  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join("; ");
+  if (typeof v === "object") {
+    if ("@value" in v) return asText(v["@value"]);
+    for (const key of ["none", "en", ...Object.keys(v)]) {
+      const t = asText(v[key]);
+      if (t) return t;
+    }
+  }
+  return String(v);
+};
+
+// all metadata as readable label/value pairs
 function metaOf(m) {
   const md = Array.isArray(m.metadata) ? m.metadata : [];
-  return md.filter(e => e && (e.label || e.value))
-           .map(e => ({ label: String(e.label || ""), value: String(e.value || "") }));
+  return md.map(e => ({ label: asText(e && e.label), value: asText(e && e.value) }))
+           .filter(e => e.label);
 }
-const nameOf = m => (typeof m.label === "string" ? m.label : null) ||
-                    ((metaOf(m)[0] || {}).value) || null;
+
+// only these fields are shown under the image, in this order
+const KEEP_META = ["storage location", "md_processid", "node id"];
+const shownMetaOf = m => KEEP_META
+  .map(k => metaOf(m).find(e => e.label.toLowerCase() === k))
+  .filter(Boolean);
+
+// the box comes from the "Storage location" metadata field
+const OTHER_BOX = "other";
+const boxOf = m => {
+  const e = metaOf(m).find(e => /^storage\s*location$/i.test(e.label));
+  return e && e.value.trim() ? e.value.trim() : null;
+};
+
+const nameOf = m => asText(m.label) ||
+  ((metaOf(m).find(e => /^md_recordid$/i.test(e.label)) || {}).value) || null;
+
+// fill in each unit's box from its manifest (missing → "other"), then persist
+async function resolveBoxes(units, onProgress) {
+  let done = 0;
+  await Promise.all(units.map(async u => {
+    if (!u.box) {
+      try { u.box = boxOf(await getManifest(u.id)) || OTHER_BOX; }
+      catch { u.box = OTHER_BOX; }
+    }
+    done++;
+    if (onProgress) onProgress(done, units.length);
+  }));
+  localStorage.setItem(LS_UNITS, JSON.stringify(UNITS));
+}
 
 const boxNames = () => [...new Set(UNITS.map(u => u.box))]
   .sort((a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")) || a.localeCompare(b));
@@ -221,10 +267,11 @@ function renderPaste() {
   crumb.textContent = "Paste data";
   app.innerHTML = `
     <div id="pasteWrap">
-      <label for="paste"><b>Paste your table</b> — one line per unit,
-        <code>ID</code> and <code>BOX</code> separated by a TAB or spaces
-        (extra columns are ignored):</label>
-      <textarea id="paste" placeholder="MNHNL190875&#9;BOX8&#10;MNHNL190876&#9;BOX8&#10;MNHNL122001&#9;BOX9 ..."></textarea>
+      <label for="paste"><b>Paste your specimen IDs</b> — one ID per line
+        (other columns are ignored). The box of each specimen is read from the
+        <code>Storage location</code> metadata of its IIIF manifest;
+        records without that field are placed in the “other” box.</label>
+      <textarea id="paste" placeholder="MNHNL190875&#10;MNHNL190876&#10;MNHNL122001 ..."></textarea>
       <div class="pastebar">
         <button onclick="loadPaste()">Load units</button>
         <button class="ghost" onclick="loadDemo()">Paste example</button>
@@ -233,37 +280,37 @@ function renderPaste() {
     </div>`;
 }
 
-window.loadPaste = () => {
+window.loadPaste = async () => {
   const text = document.getElementById("paste").value;
   const units = [];
   const bad = [];
   text.split(/\r?\n/).forEach((line, i) => {
     const t = line.trim();
     if (!t) return;
-    const cols = t.split(/\t+|\s{2,}|\s+/).map(c => c.trim()).filter(Boolean);
-    const id = cols.find(c => /^MNHNL/i.test(c));
-    const box = cols.find(c => /^BOX/i.test(c));
-    if (id && box) units.push({ id: id.toUpperCase(), box: box.toUpperCase() });
+    const id = t.split(/\t+|\s+/).map(c => c.trim()).find(c => /^MNHNL/i.test(c));
+    if (id) units.push({ id: id.toUpperCase() });      // box comes from the manifest
     else bad.push(i + 1);
   });
   const msg = document.getElementById("pasteMsg");
   if (!units.length) {
-    msg.textContent = "No valid lines found. Expected e.g. MNHNL190875  BOX8";
+    msg.textContent = "No valid IDs found. Expected e.g. MNHNL190875";
     return;
   }
   UNITS = units;
   cache.clear();
-  localStorage.setItem(LS_UNITS, JSON.stringify(units));   // survive refresh
+  await resolveBoxes(units, (d, n) => {                 // read boxes from manifests
+    msg.textContent = `Reading boxes from manifests (${d}/${n})…`;
+  });
   msg.textContent = units.length + " units loaded"
+    + (units.some(u => u.box === OTHER_BOX) ? " — some without storage location → “other”" : "")
     + (bad.length ? " — skipped lines: " + bad.join(", ") : "");
   setRoute({ view: "boxes" });
 };
 
 window.loadDemo = () => {
   document.getElementById("paste").value =
-    "MNHNL190875\tBOX8\nMNHNL190876\tBOX8\nMNHNL190877\tBOX8\nMNHNL190878\tBOX8\n" +
-    "MNHNL190879\tBOX8\nMNHNL196540\tBOX8\nMNHNL122001\tBOX9\nMNHNL122014\tBOX9\n" +
-    "MNHNL133403\tBOX9\nMNHNL133409\tBOX9\nMNHNL133410\tBOX9\nMNHNL133411\tBOX9";
+    "MNHNL190875\nMNHNL190876\nMNHNL190877\nMNHNL190878\nMNHNL190879\nMNHNL196540\n" +
+    "MNHNL122001\nMNHNL122014\nMNHNL133403\nMNHNL133409\nMNHNL133410\nMNHNL133411";
 };
 
 /* ---------- boxes view ---------- */
@@ -374,10 +421,10 @@ async function loadUnit(unit) {
   try {
     const m = await getManifest(unit.id);
     curPages = pagesOf(m);
-    const metaBox = document.getElementById("metaBox");   // manifest metadata
+    const metaBox = document.getElementById("metaBox");   // storage location / process id / node id
     if (metaBox) {
       metaBox.innerHTML = "";
-      metaOf(m).forEach(({ label, value }) => {
+      shownMetaOf(m).forEach(({ label, value }) => {
         const row = document.createElement("div");
         const k = document.createElement("span"); k.className = "k"; k.textContent = label + ":";
         const v = document.createElement("span"); v.textContent = value;
@@ -677,14 +724,21 @@ function render() {
   else renderViewer();
 }
 
-/* ---------- boot: restore session, then follow the URL hash ---------- */
-if (restoreUnits()) {
-  route = validRoute(location.hash ? hashToRoute(location.hash) : { view: "boxes" });
-  history.replaceState(null, "", routeToHash(route));
-} else {
-  route = { view: "paste" };
-}
-render();
+/* ---------- boot: restore session, resolve boxes, follow the URL hash ---------- */
+(async () => {
+  if (restoreUnits()) {
+    if (UNITS.some(u => !u.box)) {            // saved before boxes were resolved
+      crumb.textContent = "";
+      app.innerHTML = `<p style="text-align:center;color:var(--muted);padding:30px">Reading boxes from manifests…</p>`;
+      await resolveBoxes(UNITS);
+    }
+    route = validRoute(location.hash ? hashToRoute(location.hash) : { view: "boxes" });
+    history.replaceState(null, "", routeToHash(route));
+  } else {
+    route = { view: "paste" };
+  }
+  render();
+})();
 </script>
 </body>
 </html>
