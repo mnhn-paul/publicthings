@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNHNL Specimen Browser</title>
+<style>
+  :root { --bg:#f4f2ec; --panel:#fff; --ink:#24312b; --muted:#6b7a72;
+          --accent:#2e6e4e; --accent2:#8fbc9f; --line:#e0ddd2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { background:var(--panel); border-bottom:2px solid var(--accent);
+           padding:14px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:19px; margin:0; }
+  header .crumb { color:var(--muted); font-size:14px; }
+  main { padding:22px; max-width:1200px; margin:0 auto; }
+
+  textarea { width:100%; height:180px; font-family:ui-monospace,Consolas,monospace;
+             font-size:13px; padding:10px; border:1px solid var(--line); border-radius:8px; }
+  .pastebar { display:flex; gap:10px; align-items:center; margin:10px 0 4px; flex-wrap:wrap; }
+  .pastebar .note { color:var(--muted); font-size:12.5px; }
+
+  .boxes { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+  .boxcard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+             padding:18px; cursor:pointer; transition:box-shadow .15s, transform .15s; }
+  .boxcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
+  .boxcard .name { font-size:21px; font-weight:700; color:var(--accent); }
+  .boxcard .count { color:var(--muted); font-size:13px; margin-top:4px; }
+
+  .unitlist { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+              padding:12px; max-height:52vh; overflow:auto; }
+  .unitlist .unit { padding:8px 12px; border-radius:6px; cursor:pointer; font-size:15px; }
+  .unitlist .unit:hover { background:var(--bg); }
+
+  .viewer-top { display:flex; align-items:center; justify-content:space-between;
+                flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+  .pos { color:var(--muted); font-size:14px; }
+  .unitlabel { font-size:20px; font-weight:700; }
+  .progress { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-bottom:14px; }
+  .progress > div { height:100%; background:var(--accent); width:0; transition:width .2s; }
+  .stage { background:#23282a; border-radius:10px; min-height:60vh; display:flex;
+           align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  .stage img { max-width:100%; max-height:78vh; display:block; cursor:zoom-in; }
+  .stage.zoomed { overflow:auto; align-items:flex-start; justify-content:flex-start; }
+  .stage img.zoomed { max-width:none; max-height:none; cursor:zoom-out; }
+  .loading,.error { color:#fff; padding:30px; text-align:center; }
+  .error a { color:var(--accent2); }
+  .strip { position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+           background:rgba(0,0,0,.55); border-radius:20px; padding:6px 10px;
+           display:flex; gap:8px; }
+  .strip .dot { width:40px; height:40px; border-radius:8px; object-fit:cover; cursor:pointer;
+                border:2px solid transparent; background:#444; }
+  .strip .dot.active { border-color:var(--accent2); }
+
+  .controls { display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+           padding:10px 22px; font-size:15px; cursor:pointer; }
+  button:disabled { background:var(--line); color:var(--muted); cursor:not-allowed; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .hint { text-align:center; color:var(--muted); font-size:12.5px; margin-top:10px; }
+  .backlink { background:none; color:var(--accent); border:0; font-size:14px;
+              padding:6px 0; cursor:pointer; text-decoration:underline; }
+  #pasteWrap { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MNHNL Specimen Browser</h1>
+  <span class="crumb" id="crumb"></span>
+</header>
+<main id="app"></main>
+
+<script>
+const API = "https://face.mnhn.gov.lu/viewer/api/v1/records/";
+const MIRADOR = "https://face.mnhn.gov.lu/viewer/mirador/?manifest=";
+const cache = new Map();
+
+const app = document.getElementById("app");
+const crumb = document.getElementById("crumb");
+
+let UNITS = [];                       // [{id, box}]
+let route = { view: "paste" };        // paste | boxes | list | viewer
+let curPages = [], curPage = 0;
+
+const manifestUrl = id => API + id + "/manifest/";
+
+async function getManifest(id) {
+  if (cache.has(id)) return cache.get(id);
+  const p = fetch(manifestUrl(id)).then(r => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+  cache.set(id, p);
+  p.catch(() => cache.delete(id));
+  return p;
+}
+
+function pagesOf(m) {
+  let canvases = [];
+  (m.sequences || []).forEach(s => { if (s.canvases) canvases = canvases.concat(s.canvases); });
+  return canvases.map(c => {
+    const img = (c.images && c.images[0] && c.images[0].resource) || {};
+    return { serviceId: img.service && (img.service["@id"] || img.service.id),
+             fallback: img["@id"] };
+  });
+}
+
+const imgUrl = (p, w) =>
+  p.serviceId ? p.serviceId.replace(/\/$/, "") + "/full/" + w + ",/0/default.jpg" : p.fallback;
+
+const boxNames = () => [...new Set(UNITS.map(u => u.box))]
+  .sort((a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")) || a.localeCompare(b));
+const unitsIn = box => UNITS.filter(u => u.box === box);
+
+/* ---------- paste view ---------- */
+
+function renderPaste() {
+  crumb.textContent = "Paste data";
+  app.innerHTML = `
+    <div id="pasteWrap">
+      <label for="paste"><b>Paste your table</b> — one line per unit,
+        <code>ID</code> and <code>BOX</code> separated by a TAB or spaces
+        (extra columns are ignored):</label>
+      <textarea id="paste" placeholder="MNHNL190875&#9;BOX8&#10;MNHNL190876&#9;BOX8&#10;MNHNL122001&#9;BOX9 ..."></textarea>
+      <div class="pastebar">
+        <button onclick="loadPaste()">Load units</button>
+        <button class="ghost" onclick="loadDemo()">Paste example</button>
+        <span class="note" id="pasteMsg"></span>
+      </div>
+    </div>`;
+}
+
+window.loadPaste = () => {
+  const text = document.getElementById("paste").value;
+  const units = [];
+  const bad = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    const t = line.trim();
+    if (!t) return;
+    const cols = t.split(/\t+|\s{2,}|\s+/).map(c => c.trim()).filter(Boolean);
+    const id = cols.find(c => /^MNHNL/i.test(c));
+    const box = cols.find(c => /^BOX/i.test(c));
+    if (id && box) units.push({ id: id.toUpperCase(), box: box.toUpperCase() });
+    else bad.push(i + 1);
+  });
+  const msg = document.getElementById("pasteMsg");
+  if (!units.length) {
+    msg.textContent = "No valid lines found. Expected e.g. MNHNL190875  BOX8";
+    return;
+  }
+  UNITS = units;
+  cache.clear();
+  msg.textContent = units.length + " units loaded"
+    + (bad.length ? " — skipped lines: " + bad.join(", ") : "");
+  route = { view: "boxes" };   // was: openBoxes() — undefined, crashed silently
+  render();
+};
+
+window.loadDemo = () => {
+  document.getElementById("paste").value =
+    "MNHNL190875\tBOX8\nMNHNL190876\tBOX8\nMNHNL190877\tBOX8\nMNHNL190878\tBOX8\n" +
+    "MNHNL190879\tBOX8\nMNHNL196540\tBOX8\nMNHNL122001\tBOX9\nMNHNL122014\tBOX9\n" +
+    "MNHNL133403\tBOX9\nMNHNL133409\tBOX9\nMNHNL133410\tBOX9\nMNHNL133411\tBOX9";
+};
+
+/* ---------- boxes view ---------- */
+
+function renderBoxes() {
+  crumb.innerHTML = `<button class="backlink" onclick="go('paste')">← New data</button> &nbsp;All boxes`;
+  app.innerHTML = `<div class="boxes">` + boxNames().map((b, i) => {
+    const n = unitsIn(b).length;
+    return `<div class="boxcard" onclick="openBoxIdx(${i})">
+      <div class="name">${b}</div><div class="count">${n} unit${n > 1 ? "s" : ""}</div></div>`;
+  }).join("") + `</div>`;
+}
+
+/* ---------- unit list of a box ---------- */
+
+function renderList() {
+  const b = route.box;
+  const list = unitsIn(b);
+  crumb.innerHTML = `<button class="backlink" onclick="go('boxes')">← All boxes</button> &nbsp;${b}`;
+  app.innerHTML = `<p style="margin:4px 0 10px">Select a specimen in ${b}
+      (<button class="backlink" onclick="openBoxIndex(0)">start at the first one →</button>)</p>
+    <div class="unitlist">` + list.map((u, i) =>
+      `<div class="unit" onclick="openBoxIndex(${i})">${i + 1}. &nbsp;${u.id}</div>`
+    ).join("") + `</div>`;
+}
+
+/* ---------- viewer ---------- */
+
+function renderViewer() {
+  const { box, idx } = route;
+  const list = unitsIn(box);
+  const unit = list[idx];
+  crumb.innerHTML =
+    `<button class="backlink" onclick="go('boxes')">← All boxes</button>` +
+    `<button class="backlink" onclick="go('list')"> &nbsp;${box} list</button>` +
+    ` &nbsp;Unit ${idx + 1} / ${list.length}`;
+  app.innerHTML = `
+    <div class="viewer-top">
+      <div class="pos">${box} — specimen ${idx + 1} of ${list.length}</div>
+      <div class="unitlabel">${unit.id}</div>
+      <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador ↗</a>
+    </div>
+    <div class="progress"><div style="width:${100 * (idx + 1) / list.length}%"></div></div>
+    <div class="stage" id="stage"><div class="loading" id="msg">Loading…</div></div>
+    <div class="controls">
+      <button id="prev" ${idx === 0 ? "disabled" : ""} onclick="nav(-1)">◀ Prev</button>
+      <button class="ghost" id="prevImg" style="display:none" onclick="cycleImage(-1)">◀ Prev image</button>
+      <button class="ghost" id="nextImg" style="display:none" onclick="cycleImage(1)">Next image ▶</button>
+      <button id="next" ${idx === list.length - 1 ? "disabled" : ""} onclick="nav(1)">Next ▶</button>
+    </div>
+    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · click image to zoom</div>`;
+  loadUnit(unit);
+  const nx = list[idx + 1];
+  if (nx) getManifest(nx.id).catch(() => {});   // prefetch next specimen
+}
+
+async function loadUnit(unit) {
+  const stage = document.getElementById("stage");
+  curPage = 0;
+  stage.innerHTML = `<div class="loading">Loading ${unit.id}…</div>`;
+  try {
+    const m = await getManifest(unit.id);
+    curPages = pagesOf(m);
+    if (!curPages.length) throw new Error("no images in manifest");
+    showPage();
+  } catch (e) {
+    curPages = [];
+    stage.innerHTML = `<div class="error">Could not load images for ${unit.id} (${e.message}).<br>
+      Try the <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador viewer</a> directly.</div>`;
+    document.getElementById("prevImg").style.display = "none";
+    document.getElementById("nextImg").style.display = "none";
+  }
+}
+
+function showPage() {
+  const stage = document.getElementById("stage");
+  const p = curPages[curPage];
+  stage.innerHTML = "";
+  const img = document.createElement("img");
+  img.src = imgUrl(p, 1600);
+  img.alt = "specimen image";
+  img.onclick = () => {
+    const z = stage.classList.toggle("zoomed");
+    img.classList.toggle("zoomed", z);
+    img.src = imgUrl(p, z ? 3000 : 1600);
+  };
+  stage.appendChild(img);
+  if (curPages.length > 1) {
+    const strip = document.createElement("div");
+    strip.className = "strip";
+    curPages.forEach((pg, i) => {
+      const t = document.createElement("img");
+      t.className = "dot" + (i === curPage ? " active" : "");
+      t.src = imgUrl(pg, 120);
+      t.title = "Image " + (i + 1);
+      t.onclick = () => { curPage = i; showPage(); };
+      strip.appendChild(t);
+    });
+    stage.appendChild(strip);
+  }
+  const many = curPages.length > 1 ? "" : "none";
+  document.getElementById("prevImg").style.display = many;
+  document.getElementById("nextImg").style.display = many;
+}
+
+/* ---------- navigation ---------- */
+
+window.go = v => { route = v === "boxes" ? { view: "boxes" }
+                     : v === "list" ? { view: "list", box: route.box }
+                     : { view: "paste" };
+                   render(); };
+window.openBox = b => { route = { view: "list", box: b }; render(); };
+window.openBoxIdx = i => openBox(boxNames()[i]);
+window.openBoxIndex = i => { route = { view: "viewer", box: route.box, idx: i }; render(); };
+window.nav = d => {
+  const list = unitsIn(route.box);
+  const n = route.idx + d;
+  if (n < 0 || n >= list.length) return;
+  route.idx = n; render();
+};
+window.cycleImage = d => {
+  if (!curPages.length) return;
+  curPage = (curPage + d + curPages.length) % curPages.length;
+  showPage();
+};
+
+document.addEventListener("keydown", e => {
+  if (route.view !== "viewer" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); nav(1); }
+  else if (e.key === "ArrowLeft") nav(-1);
+  else if (e.key === "ArrowUp") { e.preventDefault(); cycleImage(-1); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); cycleImage(1); }
+});
+
+function render() {
+  if (route.view === "paste") renderPaste();
+  else if (route.view === "boxes") renderBoxes();
+  else if (route.view === "list") renderList();
+  else renderViewer();
+}
+
+renderPaste();
+</script>
+</body>
+</html>
