@@ -32,6 +32,11 @@
                          background:#e8e5da; display:block; }
 
   .unitgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+  .bkpanel { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--mark);
+             border-radius:10px; padding:14px 16px; margin-bottom:18px; }
+  .bkpanel h2 { font-size:15px; margin:0 0 10px; color:var(--mark); }
+  .bkpanel .unitgrid { grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); }
+  .bkpanel .ucard-thumb { height:90px; }
   .unitcard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
               overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s;
               position:relative; }
@@ -111,7 +116,8 @@
   .meta .k { color:var(--muted); margin-right:6px; }
 
   /* keyboard help overlay */
-  .helpbtn { margin-left:auto; padding:4px 12px; font-size:12.5px; }
+  .headbtns { margin-left:auto; display:flex; gap:8px; }
+  .helpbtn { padding:4px 12px; font-size:12.5px; }
   .helpoverlay { position:fixed; inset:0; background:rgba(20,25,23,.55); display:flex;
                  align-items:center; justify-content:center; z-index:50; }
   .helpoverlay .panel { background:var(--panel); border-radius:10px; padding:20px 26px;
@@ -129,7 +135,10 @@
 <header>
   <h1>MNHNL Specimen Browser</h1>
   <span class="crumb" id="crumb"></span>
-  <button class="ghost helpbtn" onclick="toggleHelp()">? shortcuts</button>
+  <span class="headbtns">
+    <button class="ghost helpbtn" onclick="clearSavedData()" title="Clear loaded records and bookmarks saved in this browser">Clear saved data</button>
+    <button class="ghost helpbtn" onclick="toggleHelp()">? shortcuts</button>
+  </span>
 </header>
 <main id="app"></main>
 
@@ -144,6 +153,19 @@ localStorage.removeItem("mnhnl.reviewed");            // removed "reviewed" feat
 let bookmarks = new Set();
 try { bookmarks = new Set(JSON.parse(localStorage.getItem(LS_BOOKMARKS) || "[]")); } catch {}
 const saveBookmarks = () => localStorage.setItem(LS_BOOKMARKS, JSON.stringify([...bookmarks]));
+
+// wipe all saved records + bookmarks from this browser (with confirmation)
+window.clearSavedData = () => {
+  if (!UNITS.length && !bookmarks.size) { alert("Nothing is saved yet."); return; }
+  if (!confirm(`Clear all saved data?\n\nThis removes ${UNITS.length} loaded record(s) and `
+      + `${bookmarks.size} bookmark(s) saved in this browser.`)) return;
+  localStorage.removeItem(LS_UNITS);
+  localStorage.removeItem(LS_BOOKMARKS);
+  UNITS = [];
+  bookmarks = new Set();
+  cache.clear();
+  setRoute({ view: "paste" });
+};
 function restoreUnits() {
   try {
     const arr = JSON.parse(localStorage.getItem(LS_UNITS) || "null");
@@ -327,7 +349,18 @@ window.loadDemo = () => {
 function renderBoxes() {
   crumb.innerHTML = `<button class="backlink" onclick="go('paste')">← New data</button> &nbsp;All boxes`;
   const names = boxNames();
-  app.innerHTML = `<div class="boxes">` + names.map((b, i) => {
+  const bkUnits = UNITS.filter(u => bookmarks.has(u.id) && u.box);
+  const bkHTML = bkUnits.length ? `
+    <div class="bkpanel">
+      <h2>★ Bookmarked — quick access (${bkUnits.length})</h2>
+      <div class="unitgrid">` + bkUnits.map((u, i) =>
+        `<div class="unitcard marked" onclick="openBookmark('${u.id}')">
+           <div class="ucard-thumb" id="bkthumb-${i}">loading…</div>
+           <div class="markbadge">★</div>
+           <div class="ucard-label">${u.id}
+             <br><small style="color:var(--muted);font-weight:400;font-size:11.5px">${u.box}</small></div></div>`
+      ).join("") + `</div></div>` : "";
+  app.innerHTML = bkHTML + `<div class="boxes">` + names.map((b, i) => {
     const units = unitsIn(b);
     const n = units.length;
     const r = units.filter(u => bookmarks.has(u.id)).length;
@@ -336,8 +369,16 @@ function renderBoxes() {
       <div class="count">${n} unit${n > 1 ? "s" : ""}${r ? ` · ${r} bookmarked` : ""}</div>
       <div class="mosaic" id="mosaic-${i}"></div></div>`;
   }).join("") + `</div>`;
+  if (bkUnits.length) loadThumbs(bkUnits, "bkthumb");
   names.forEach((b, i) => fillMosaic(i, unitsIn(b).slice(0, 4)));
 }
+
+window.openBookmark = id => {
+  const u = UNITS.find(x => x.id === id);
+  if (!u || !u.box) return;
+  const idx = unitsIn(u.box).findIndex(x => x.id === id);
+  if (idx >= 0) setRoute({ view: "viewer", box: u.box, idx });
+};
 
 async function fillMosaic(i, units) {
   const el = document.getElementById("mosaic-" + i);
@@ -372,9 +413,9 @@ function renderList() {
   loadThumbs(list);
 }
 
-async function loadThumbs(list) {
+async function loadThumbs(list, prefix = "thumb") {
   await Promise.all(list.map(async (u, i) => {
-    const el = document.getElementById("thumb-" + i);
+    const el = document.getElementById(prefix + "-" + i);
     try {
       const m = await getManifest(u.id);
       if (!el || !el.isConnected) return;
