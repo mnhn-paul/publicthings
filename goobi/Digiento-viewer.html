@@ -295,16 +295,21 @@ const unitsIn = box => UNITS.filter(u => u.box === box);
 /* ---------- paste view ---------- */
 
 function renderPaste() {
-  crumb.textContent = "Paste data";
+  const hasData = UNITS.length > 0;
+  crumb.innerHTML = hasData
+    ? `<button class="backlink" onclick="go('boxes')">← Back to the ${UNITS.length} loaded record(s)</button> &nbsp;Add records`
+    : "Paste data";
   app.innerHTML = `
     <div id="pasteWrap">
       <label for="paste"><b>Paste your specimen IDs</b> — one ID per line
-        (other columns are ignored). The box of each specimen is read from the
+        (other columns are ignored).${hasData ? " New IDs are <b>added</b> to the records already loaded; duplicates are skipped." : ""}
+        The box of each specimen is read from the
         <code>Storage location</code> metadata of its IIIF manifest;
-        records without that field are placed in the “other” box.</label>
+        records without that field are placed in the “other” box.
+        Loaded records stay available until you press “Clear saved data”.</label>
       <textarea id="paste" placeholder="MNHNL190875&#10;MNHNL190876&#10;MNHNL122001 ..."></textarea>
       <div class="pastebar">
-        <button onclick="loadPaste()">Load units</button>
+        <button onclick="loadPaste()">${hasData ? "Add units" : "Load units"}</button>
         <button class="ghost" onclick="loadDemo()">Paste example</button>
         <span class="note" id="pasteMsg"></span>
       </div>
@@ -313,27 +318,40 @@ function renderPaste() {
 
 window.loadPaste = async () => {
   const text = document.getElementById("paste").value;
-  const units = [];
+  const ids = [];
   const bad = [];
   text.split(/\r?\n/).forEach((line, i) => {
     const t = line.trim();
     if (!t) return;
     const id = t.split(/\t+|\s+/).map(c => c.trim()).find(c => /^MNHNL/i.test(c));
-    if (id) units.push({ id: id.toUpperCase() });      // box comes from the manifest
+    if (id) ids.push(id.toUpperCase());
     else bad.push(i + 1);
   });
   const msg = document.getElementById("pasteMsg");
-  if (!units.length) {
+  if (!ids.length) {
     msg.textContent = "No valid IDs found. Expected e.g. MNHNL190875";
     return;
   }
-  UNITS = units;
-  cache.clear();
-  await resolveBoxes(units, (d, n) => {                 // read boxes from manifests
+  const existing = new Set(UNITS.map(u => u.id));     // merge, skip duplicates
+  const seen = new Set();
+  const fresh = [];
+  let dups = 0;
+  ids.forEach(id => {
+    if (existing.has(id) || seen.has(id)) { dups++; return; }
+    seen.add(id);
+    fresh.push({ id });                              // box comes from the manifest
+  });
+  if (!fresh.length) {
+    msg.textContent = `All ${ids.length} ID(s) are already loaded — nothing new to add.`;
+    return;
+  }
+  UNITS.push(...fresh);
+  await resolveBoxes(fresh, (d, n) => {              // read boxes of the new records
     msg.textContent = `Reading boxes from manifests (${d}/${n})…`;
   });
-  msg.textContent = units.length + " units loaded"
-    + (units.some(u => u.box === OTHER_BOX) ? " — some without storage location → “other”" : "")
+  msg.textContent = `${fresh.length} new record(s) added — ${UNITS.length} loaded in total`
+    + (dups ? ` · ${dups} duplicate(s) skipped` : "")
+    + (fresh.some(u => u.box === OTHER_BOX) ? " — some without storage location → “other”" : "")
     + (bad.length ? " — skipped lines: " + bad.join(", ") : "");
   setRoute({ view: "boxes" });
 };
@@ -347,7 +365,7 @@ window.loadDemo = () => {
 /* ---------- boxes view ---------- */
 
 function renderBoxes() {
-  crumb.innerHTML = `<button class="backlink" onclick="go('paste')">← New data</button> &nbsp;All boxes`;
+  crumb.innerHTML = `<button class="backlink" onclick="go('paste')">＋ Add records</button> &nbsp;All boxes`;
   const names = boxNames();
   const bkUnits = UNITS.filter(u => bookmarks.has(u.id) && u.box);
   const bkHTML = bkUnits.length ? `
@@ -373,12 +391,7 @@ function renderBoxes() {
   names.forEach((b, i) => fillMosaic(i, unitsIn(b).slice(0, 4)));
 }
 
-window.openBookmark = id => {
-  const u = UNITS.find(x => x.id === id);
-  if (!u || !u.box) return;
-  const idx = unitsIn(u.box).findIndex(x => x.id === id);
-  if (idx >= 0) setRoute({ view: "viewer", box: u.box, idx });
-};
+window.openBookmark = id => setRoute({ view: "byid", id });
 
 async function fillMosaic(i, units) {
   const el = document.getElementById("mosaic-" + i);
@@ -632,23 +645,39 @@ function showPage() {
 }
 
 /* ---------- routing: view state lives in the URL hash ---------- */
+/* records are addressed by ID (#id/MNHNL190878) so links stay valid even
+   if the box name or the sequence within a box changes                */
 
-const routeToHash = r =>
-  r.view === "boxes" ? "#boxes" :
-  r.view === "list" ? "#list/" + encodeURIComponent(r.box) :
-  r.view === "viewer" ? "#view/" + encodeURIComponent(r.box) + "/" + r.idx : "#paste";
+const routeToHash = r => {
+  if (r.view === "boxes") return "#boxes";
+  if (r.view === "list") return "#list/" + encodeURIComponent(r.box);
+  if (r.view === "byid") return "#id/" + encodeURIComponent(r.id);
+  if (r.view === "viewer") {
+    const unit = unitsIn(r.box)[r.idx];
+    return unit ? "#id/" + encodeURIComponent(unit.id) : "#boxes";
+  }
+  return "#paste";
+};
 
 function hashToRoute(h) {
   const p = (h || "").replace(/^#/, "").split("/").map(decodeURIComponent);
   if (p[0] === "boxes") return { view: "boxes" };
   if (p[0] === "list" && p[1]) return { view: "list", box: p[1] };
-  if (p[0] === "view" && p[1] && p[2] !== "") return { view: "viewer", box: p[1], idx: parseInt(p[2], 10) };
+  if (p[0] === "id" && p[1]) return { view: "byid", id: p[1].toUpperCase() };
+  if (p[0] === "view" && p[1] && p[2] !== "")                  // legacy format
+    return { view: "viewer", box: p[1], idx: parseInt(p[2], 10) };
   return { view: "paste" };
 }
 
-// drop routes that no longer match the loaded data
+// resolve/drop routes that no longer match the loaded data
 function validRoute(r) {
   if (r.view === "paste" || !UNITS.length) return { view: "paste" };
+  if (r.view === "byid") {
+    const u = UNITS.find(x => x.id === r.id);
+    if (!u || !u.box) return { view: "boxes" };
+    const idx = unitsIn(u.box).findIndex(x => x.id === u.id);
+    return idx >= 0 ? { view: "viewer", box: u.box, idx } : { view: "boxes" };
+  }
   if (r.view === "list") return unitsIn(r.box).length ? r : { view: "boxes" };
   if (r.view === "viewer") {
     const l = unitsIn(r.box);
@@ -659,8 +688,8 @@ function validRoute(r) {
 }
 
 function setRoute(r) {
-  route = r;
-  const h = routeToHash(r);
+  route = validRoute(r);            // normalize, then sync the hash
+  const h = routeToHash(route);
   if (location.hash === h) render();
   else location.hash = h;            // hashchange listener renders
 }
