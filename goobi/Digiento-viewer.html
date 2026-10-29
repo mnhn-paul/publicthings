@@ -27,11 +27,25 @@
   .boxcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
   .boxcard .name { font-size:21px; font-weight:700; color:var(--accent); }
   .boxcard .count { color:var(--muted); font-size:13px; margin-top:4px; }
+  .boxcard .bar { height:4px; background:var(--line); border-radius:2px; margin-top:10px;
+                  overflow:hidden; }
+  .boxcard .bar > div { height:100%; background:var(--accent); }
+  .boxcard .mosaic { display:flex; gap:4px; margin-top:10px; }
+  .boxcard .mosaic img { width:44px; height:44px; object-fit:cover; border-radius:6px;
+                         background:#e8e5da; display:block; }
 
   .unitgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
   .unitcard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
-              overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s; }
+              overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s;
+              position:relative; }
   .unitcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
+  .donebadge { position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
+               background:var(--accent); color:#fff; font-size:13px; line-height:1;
+               display:flex; align-items:center; justify-content:center;
+               box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  .unitcard.done .ucard-label { color:var(--accent); }
+  .revbadge { background:var(--accent); color:#fff; font-size:12px; padding:2px 10px;
+              border-radius:12px; align-self:center; }
   .ucard-thumb { height:120px; background:#e8e5da; display:flex; align-items:center;
                  justify-content:center; color:var(--muted); font-size:11.5px; }
   .ucard-thumb img { width:100%; height:100%; object-fit:contain; display:block; }
@@ -91,12 +105,34 @@
   .backlink { background:none; color:var(--accent); border:0; font-size:14px;
               padding:6px 0; cursor:pointer; text-decoration:underline; }
   #pasteWrap { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; }
+
+  /* metadata panel under the image */
+  .meta { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          padding:12px 16px; margin-top:14px; display:grid;
+          grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:4px 22px; font-size:13.5px; }
+  .meta:empty { display:none; }
+  .meta .k { color:var(--muted); margin-right:6px; }
+
+  /* keyboard help overlay */
+  .helpbtn { margin-left:auto; padding:4px 12px; font-size:12.5px; }
+  .helpoverlay { position:fixed; inset:0; background:rgba(20,25,23,.55); display:flex;
+                 align-items:center; justify-content:center; z-index:50; }
+  .helpoverlay .panel { background:var(--panel); border-radius:10px; padding:20px 26px;
+                        width:min(440px,90vw); box-shadow:0 10px 40px rgba(0,0,0,.35); }
+  .helpoverlay h2 { margin:0 0 12px; font-size:17px; color:var(--accent); }
+  .helpoverlay table { border-collapse:collapse; font-size:14px; }
+  .helpoverlay td { padding:4px 10px 4px 0; }
+  .helpoverlay td.k { font-family:ui-monospace,Consolas,monospace; background:var(--bg);
+                      border:1px solid var(--line); border-radius:4px; padding:1px 7px; white-space:nowrap; }
+  .helpoverlay td.v { color:var(--muted); }
+  .helpoverlay .close { margin-top:14px; width:100%; }
 </style>
 </head>
 <body>
 <header>
   <h1>MNHNL Specimen Browser</h1>
   <span class="crumb" id="crumb"></span>
+  <button class="ghost helpbtn" onclick="toggleHelp()">? shortcuts</button>
 </header>
 <main id="app"></main>
 
@@ -104,6 +140,23 @@
 const API = "https://face.mnhn.gov.lu/viewer/api/v1/records/";
 const MIRADOR = "https://face.mnhn.gov.lu/viewer/mirador/?manifest=";
 const cache = new Map();
+
+/* ---------- session persistence (localStorage) ---------- */
+const LS_UNITS = "mnhnl.units", LS_REVIEWED = "mnhnl.reviewed";
+let reviewed = new Set();
+try { reviewed = new Set(JSON.parse(localStorage.getItem(LS_REVIEWED) || "[]")); } catch {}
+const saveReviewed = () => localStorage.setItem(LS_REVIEWED, JSON.stringify([...reviewed]));
+function restoreUnits() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(LS_UNITS) || "null");
+    if (Array.isArray(arr) && arr.length &&
+        arr.every(u => u && typeof u.id === "string" && typeof u.box === "string")) {
+      UNITS = arr;
+      return true;
+    }
+  } catch {}
+  return false;
+}
 
 const app = document.getElementById("app");
 const crumb = document.getElementById("crumb");
@@ -149,6 +202,15 @@ function thumbOf(m) {
   return pages.length ? imgUrl(pages[0], 160) : null;
 }
 
+/* manifest metadata: label/value pairs */
+function metaOf(m) {
+  const md = Array.isArray(m.metadata) ? m.metadata : [];
+  return md.filter(e => e && (e.label || e.value))
+           .map(e => ({ label: String(e.label || ""), value: String(e.value || "") }));
+}
+const nameOf = m => (typeof m.label === "string" ? m.label : null) ||
+                    ((metaOf(m)[0] || {}).value) || null;
+
 const boxNames = () => [...new Set(UNITS.map(u => u.box))]
   .sort((a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")) || a.localeCompare(b));
 const unitsIn = box => UNITS.filter(u => u.box === box);
@@ -191,10 +253,10 @@ window.loadPaste = () => {
   }
   UNITS = units;
   cache.clear();
+  localStorage.setItem(LS_UNITS, JSON.stringify(units));   // survive refresh
   msg.textContent = units.length + " units loaded"
     + (bad.length ? " — skipped lines: " + bad.join(", ") : "");
-  route = { view: "boxes" };   // was: openBoxes() — undefined, crashed silently
-  render();
+  setRoute({ view: "boxes" });
 };
 
 window.loadDemo = () => {
@@ -208,11 +270,32 @@ window.loadDemo = () => {
 
 function renderBoxes() {
   crumb.innerHTML = `<button class="backlink" onclick="go('paste')">← New data</button> &nbsp;All boxes`;
-  app.innerHTML = `<div class="boxes">` + boxNames().map((b, i) => {
-    const n = unitsIn(b).length;
+  const names = boxNames();
+  app.innerHTML = `<div class="boxes">` + names.map((b, i) => {
+    const units = unitsIn(b);
+    const n = units.length;
+    const r = units.filter(u => reviewed.has(u.id)).length;
     return `<div class="boxcard" onclick="openBoxIdx(${i})">
-      <div class="name">${b}</div><div class="count">${n} unit${n > 1 ? "s" : ""}</div></div>`;
+      <div class="name">${b}</div>
+      <div class="count">${n} unit${n > 1 ? "s" : ""} · ${r}/${n} reviewed</div>
+      <div class="bar"><div style="width:${n ? 100 * r / n : 0}%"></div></div>
+      <div class="mosaic" id="mosaic-${i}"></div></div>`;
   }).join("") + `</div>`;
+  names.forEach((b, i) => fillMosaic(i, unitsIn(b).slice(0, 4)));
+}
+
+async function fillMosaic(i, units) {
+  const el = document.getElementById("mosaic-" + i);
+  if (!el) return;
+  const thumbs = await Promise.all(units.map(async u => {
+    try { return thumbOf(await getManifest(u.id)); } catch { return null; }
+  }));
+  if (!el.isConnected) return;
+  thumbs.filter(Boolean).forEach(src => {
+    const im = document.createElement("img");
+    im.src = src; im.alt = ""; im.loading = "lazy";
+    el.appendChild(im);
+  });
 }
 
 /* ---------- unit list of a box ---------- */
@@ -220,14 +303,17 @@ function renderBoxes() {
 function renderList() {
   const b = route.box;
   const list = unitsIn(b);
+  const nDone = list.filter(u => reviewed.has(u.id)).length;
   crumb.innerHTML = `<button class="backlink" onclick="go('boxes')">← All boxes</button> &nbsp;${b}`;
-  app.innerHTML = `<p style="margin:4px 0 10px">Select a specimen in ${b}
+  app.innerHTML = `<p style="margin:4px 0 10px">Select a specimen in ${b} — ${nDone}/${list.length} reviewed
       (<button class="backlink" onclick="openBoxIndex(0)">start at the first one →</button>)</p>
-    <div class="unitgrid">` + list.map((u, i) =>
-      `<div class="unitcard" onclick="openBoxIndex(${i})">
+    <div class="unitgrid">` + list.map((u, i) => {
+      const done = reviewed.has(u.id);
+      return `<div class="unitcard${done ? " done" : ""}" onclick="openBoxIndex(${i})">
          <div class="ucard-thumb" id="thumb-${i}">loading…</div>
-         <div class="ucard-label">${i + 1}. &nbsp;${u.id}</div></div>`
-    ).join("") + `</div>`;
+         ${done ? `<div class="donebadge">✓</div>` : ""}
+         <div class="ucard-label">${i + 1}. &nbsp;${u.id}</div></div>`;
+    }).join("") + `</div>`;
   loadThumbs(list);
 }
 
@@ -240,6 +326,9 @@ async function loadThumbs(list) {
       const t = thumbOf(m);
       if (t) el.innerHTML = `<img src="${t}" alt="preview of ${u.id}" loading="lazy">`;
       else el.textContent = "no image";
+      const name = nameOf(m);
+      const card = el.closest(".unitcard");
+      if (card && name) card.title = `${u.id} — ${name}`;   // metadata on hover
     } catch {
       if (el && el.isConnected) el.textContent = "unavailable";
     }
@@ -260,15 +349,18 @@ function renderViewer() {
     <div class="viewer-top">
       <div class="pos">${box} — specimen ${idx + 1} of ${list.length}</div>
       <div class="unitlabel">${unit.id}</div>
+      <span class="revbadge" id="revBadge" style="display:${reviewed.has(unit.id) ? "inline-block" : "none"}">✓ reviewed</span>
       <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador ↗</a>
     </div>
     <div class="progress"><div style="width:${100 * (idx + 1) / list.length}%"></div></div>
     <div class="stage" id="stage"><div class="loading" id="msg">Loading…</div></div>
+    <div class="meta" id="metaBox"></div>
     <div class="controls">
       <button id="prev" ${idx === 0 ? "disabled" : ""} onclick="nav(-1)">◀ Prev</button>
+      <button class="ghost" id="markBtn" onclick="toggleReviewed()">${reviewed.has(unit.id) ? "✓ Reviewed — undo (M)" : "Mark reviewed (M)"}</button>
       <button id="next" ${idx === list.length - 1 ? "disabled" : ""} onclick="nav(1)">Next ▶</button>
     </div>
-    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · Esc reset zoom · click image to zoom · drag or scroll to pan &amp; zoom</div>`;
+    <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · M mark reviewed · Esc reset zoom · ? all shortcuts · click image to zoom · drag or scroll to pan &amp; zoom</div>`;
   loadUnit(unit);
   const nx = list[idx + 1];
   if (nx) getManifest(nx.id).catch(() => {});   // prefetch next specimen
@@ -282,10 +374,23 @@ async function loadUnit(unit) {
   try {
     const m = await getManifest(unit.id);
     curPages = pagesOf(m);
+    const metaBox = document.getElementById("metaBox");   // manifest metadata
+    if (metaBox) {
+      metaBox.innerHTML = "";
+      metaOf(m).forEach(({ label, value }) => {
+        const row = document.createElement("div");
+        const k = document.createElement("span"); k.className = "k"; k.textContent = label + ":";
+        const v = document.createElement("span"); v.textContent = value;
+        row.append(k, v);
+        metaBox.appendChild(row);
+      });
+    }
     if (!curPages.length) throw new Error("no images in manifest");
     showPage();
   } catch (e) {
     curPages = [];
+    const metaBox = document.getElementById("metaBox");
+    if (metaBox) metaBox.innerHTML = "";
     stage.innerHTML = `<div class="error">Could not load images for ${unit.id} (${e.message}).<br>
       Try the <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador viewer</a> directly.</div>`;
   }
@@ -430,20 +535,56 @@ function showPage() {
   }
 }
 
-/* ---------- navigation ---------- */
+/* ---------- routing: view state lives in the URL hash ---------- */
 
-window.go = v => { route = v === "boxes" ? { view: "boxes" }
+const routeToHash = r =>
+  r.view === "boxes" ? "#boxes" :
+  r.view === "list" ? "#list/" + encodeURIComponent(r.box) :
+  r.view === "viewer" ? "#view/" + encodeURIComponent(r.box) + "/" + r.idx : "#paste";
+
+function hashToRoute(h) {
+  const p = (h || "").replace(/^#/, "").split("/").map(decodeURIComponent);
+  if (p[0] === "boxes") return { view: "boxes" };
+  if (p[0] === "list" && p[1]) return { view: "list", box: p[1] };
+  if (p[0] === "view" && p[1] && p[2] !== "") return { view: "viewer", box: p[1], idx: parseInt(p[2], 10) };
+  return { view: "paste" };
+}
+
+// drop routes that no longer match the loaded data
+function validRoute(r) {
+  if (r.view === "paste" || !UNITS.length) return { view: "paste" };
+  if (r.view === "list") return unitsIn(r.box).length ? r : { view: "boxes" };
+  if (r.view === "viewer") {
+    const l = unitsIn(r.box);
+    if (!l.length) return { view: "boxes" };
+    return (Number.isInteger(r.idx) && r.idx >= 0 && r.idx < l.length) ? r : { view: "list", box: r.box };
+  }
+  return { view: "boxes" };
+}
+
+function setRoute(r) {
+  route = r;
+  const h = routeToHash(r);
+  if (location.hash === h) render();
+  else location.hash = h;            // hashchange listener renders
+}
+
+window.addEventListener("hashchange", () => {
+  route = validRoute(hashToRoute(location.hash));
+  render();
+});
+
+window.go = v => setRoute(v === "boxes" ? { view: "boxes" }
                      : v === "list" ? { view: "list", box: route.box }
-                     : { view: "paste" };
-                   render(); };
-window.openBox = b => { route = { view: "list", box: b }; render(); };
+                     : { view: "paste" });
+window.openBox = b => setRoute({ view: "list", box: b });
 window.openBoxIdx = i => openBox(boxNames()[i]);
-window.openBoxIndex = i => { route = { view: "viewer", box: route.box, idx: i }; render(); };
+window.openBoxIndex = i => setRoute({ view: "viewer", box: route.box, idx: i });
 window.nav = d => {
   const list = unitsIn(route.box);
   const n = route.idx + d;
   if (n < 0 || n >= list.length) return;
-  route.idx = n; render();
+  setRoute({ view: "viewer", box: route.box, idx: n });
 };
 window.cycleImage = d => {
   if (!curPages.length) return;
@@ -451,13 +592,74 @@ window.cycleImage = d => {
   showPage();
 };
 
+/* ---------- reviewed state ---------- */
+
+window.toggleReviewed = () => {
+  if (route.view !== "viewer") return;
+  const unit = unitsIn(route.box)[route.idx];
+  if (!unit) return;
+  if (reviewed.has(unit.id)) reviewed.delete(unit.id); else reviewed.add(unit.id);
+  saveReviewed();
+  const on = reviewed.has(unit.id);
+  const btn = document.getElementById("markBtn");
+  if (btn) btn.textContent = on ? "✓ Reviewed — undo (M)" : "Mark reviewed (M)";
+  const badge = document.getElementById("revBadge");
+  if (badge) badge.style.display = on ? "inline-block" : "none";
+};
+
+/* ---------- keyboard help overlay ---------- */
+
+window.toggleHelp = () => {
+  const existing = document.getElementById("helpOverlay");
+  if (existing) { existing.remove(); return; }
+  const ov = document.createElement("div");
+  ov.id = "helpOverlay";
+  ov.className = "helpoverlay";
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  const h = document.createElement("h2");
+  h.textContent = "Keyboard shortcuts";
+  const table = document.createElement("table");
+  [["→ / Space", "next specimen"],
+   ["←", "previous specimen"],
+   ["↑ / ↓", "previous / next image of this specimen"],
+   ["M", "mark current specimen as reviewed (toggle)"],
+   ["+ / −", "zoom in / out"],
+   ["Esc", "reset zoom / close this help"],
+   ["?", "toggle this help"],
+   ["Click image", "zoom in at that point (click again to reset)"],
+   ["Drag · wheel · pinch", "pan and zoom"]]
+   .forEach(([k, v]) => {
+     const tr = document.createElement("tr");
+     const td1 = document.createElement("td"); td1.className = "k"; td1.textContent = k;
+     const td2 = document.createElement("td"); td2.className = "v"; td2.textContent = v;
+     tr.append(td1, td2);
+     table.appendChild(tr);
+   });
+  const close = document.createElement("button");
+  close.className = "close"; close.textContent = "Close";
+  close.onclick = () => ov.remove();
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  panel.append(h, table, close);
+  ov.appendChild(panel);
+  document.body.appendChild(ov);
+};
+
 document.addEventListener("keydown", e => {
-  if (route.view !== "viewer" || e.target.tagName === "TEXTAREA") return;
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  if (e.key === "?") { e.preventDefault(); toggleHelp(); return; }
+  if (e.key === "Escape") {
+    const ov = document.getElementById("helpOverlay");
+    if (ov) { ov.remove(); return; }
+    if (route.view === "viewer" && applyZoom) { zoom = { scale: 1, tx: 0, ty: 0 }; applyZoom(); }
+    return;
+  }
+  if (route.view !== "viewer") return;
   if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); nav(1); }
   else if (e.key === "ArrowLeft") nav(-1);
   else if (e.key === "ArrowUp") { e.preventDefault(); cycleImage(-1); }
   else if (e.key === "ArrowDown") { e.preventDefault(); cycleImage(1); }
-  else if (e.key === "Escape" && applyZoom) { zoom = { scale: 1, tx: 0, ty: 0 }; applyZoom(); }
+  else if (e.key === "m" || e.key === "M") toggleReviewed();
   else if ((e.key === "+" || e.key === "=") && stageZoomAt) {
     const r = document.getElementById("stage").getBoundingClientRect();
     stageZoomAt(zoom.scale * 1.35, r.left + r.width / 2, r.top + r.height / 2);
@@ -475,7 +677,14 @@ function render() {
   else renderViewer();
 }
 
-renderPaste();
+/* ---------- boot: restore session, then follow the URL hash ---------- */
+if (restoreUnits()) {
+  route = validRoute(location.hash ? hashToRoute(location.hash) : { view: "boxes" });
+  history.replaceState(null, "", routeToHash(route));
+} else {
+  route = { view: "paste" };
+}
+render();
 </script>
 </body>
 </html>
