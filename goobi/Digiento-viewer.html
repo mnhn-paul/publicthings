@@ -28,10 +28,14 @@
   .boxcard .name { font-size:21px; font-weight:700; color:var(--accent); }
   .boxcard .count { color:var(--muted); font-size:13px; margin-top:4px; }
 
-  .unitlist { background:var(--panel); border:1px solid var(--line); border-radius:10px;
-              padding:12px; max-height:52vh; overflow:auto; }
-  .unitlist .unit { padding:8px 12px; border-radius:6px; cursor:pointer; font-size:15px; }
-  .unitlist .unit:hover { background:var(--bg); }
+  .unitgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+  .unitcard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+              overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s; }
+  .unitcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
+  .ucard-thumb { height:120px; background:#e8e5da; display:flex; align-items:center;
+                 justify-content:center; color:var(--muted); font-size:11.5px; }
+  .ucard-thumb img { width:100%; height:100%; object-fit:contain; display:block; }
+  .ucard-label { padding:8px 10px; font-size:14px; font-weight:600; border-top:1px solid var(--line); }
 
   .viewer-top { display:flex; align-items:center; justify-content:space-between;
                 flex-wrap:wrap; gap:10px; margin-bottom:12px; }
@@ -52,6 +56,20 @@
   .strip .dot { width:40px; height:40px; border-radius:8px; object-fit:cover; cursor:pointer;
                 border:2px solid transparent; background:#444; }
   .strip .dot.active { border-color:var(--accent2); }
+
+  /* side arrows for cycling images of one specimen (wide screens) */
+  .sidearrow { position:absolute; top:50%; transform:translateY(-50%); width:46px; height:46px;
+               padding:0; border-radius:50%; background:rgba(0,0,0,.55); color:#fff;
+               font-size:18px; line-height:1; display:flex; align-items:center;
+               justify-content:center; }
+  .sidearrow:hover { background:var(--accent); }
+  .sidearrow.left { left:14px; }
+  .sidearrow.right { right:14px; }
+  .stage.zoomed .sidearrow { display:none; }
+  /* bottom image buttons remain as fallback on narrow screens */
+  .imgbtn.off { display:none !important; }
+  @media (min-width:701px) { .imgbtn { display:none !important; } }
+  @media (max-width:700px)  { .sidearrow { display:none; } }
 
   .controls { display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
   button { background:var(--accent); color:#fff; border:0; border-radius:8px;
@@ -108,6 +126,17 @@ function pagesOf(m) {
 
 const imgUrl = (p, w) =>
   p.serviceId ? p.serviceId.replace(/\/$/, "") + "/full/" + w + ",/0/default.jpg" : p.fallback;
+
+/* small preview: canvas/manifest "thumbnail" entry, else a tiny IIIF region */
+function thumbOf(m) {
+  const first = (m.sequences || []).flatMap(s => s.canvases || [])[0] || {};
+  const pick = t => Array.isArray(t) ? t[0] : t;
+  const entry = pick(first.thumbnail) || pick(m.thumbnail);
+  const url = entry && (entry["@id"] || entry.id);
+  if (url) return url;
+  const pages = pagesOf(m);
+  return pages.length ? imgUrl(pages[0], 160) : null;
+}
 
 const boxNames = () => [...new Set(UNITS.map(u => u.box))]
   .sort((a, b) => parseInt(a.replace(/\D/g, "")) - parseInt(b.replace(/\D/g, "")) || a.localeCompare(b));
@@ -183,9 +212,27 @@ function renderList() {
   crumb.innerHTML = `<button class="backlink" onclick="go('boxes')">← All boxes</button> &nbsp;${b}`;
   app.innerHTML = `<p style="margin:4px 0 10px">Select a specimen in ${b}
       (<button class="backlink" onclick="openBoxIndex(0)">start at the first one →</button>)</p>
-    <div class="unitlist">` + list.map((u, i) =>
-      `<div class="unit" onclick="openBoxIndex(${i})">${i + 1}. &nbsp;${u.id}</div>`
+    <div class="unitgrid">` + list.map((u, i) =>
+      `<div class="unitcard" onclick="openBoxIndex(${i})">
+         <div class="ucard-thumb" id="thumb-${i}">loading…</div>
+         <div class="ucard-label">${i + 1}. &nbsp;${u.id}</div></div>`
     ).join("") + `</div>`;
+  loadThumbs(list);
+}
+
+async function loadThumbs(list) {
+  await Promise.all(list.map(async (u, i) => {
+    const el = document.getElementById("thumb-" + i);
+    try {
+      const m = await getManifest(u.id);
+      if (!el || !el.isConnected) return;
+      const t = thumbOf(m);
+      if (t) el.innerHTML = `<img src="${t}" alt="preview of ${u.id}" loading="lazy">`;
+      else el.textContent = "no image";
+    } catch {
+      if (el && el.isConnected) el.textContent = "unavailable";
+    }
+  }));
 }
 
 /* ---------- viewer ---------- */
@@ -208,8 +255,8 @@ function renderViewer() {
     <div class="stage" id="stage"><div class="loading" id="msg">Loading…</div></div>
     <div class="controls">
       <button id="prev" ${idx === 0 ? "disabled" : ""} onclick="nav(-1)">◀ Prev</button>
-      <button class="ghost" id="prevImg" style="display:none" onclick="cycleImage(-1)">◀ Prev image</button>
-      <button class="ghost" id="nextImg" style="display:none" onclick="cycleImage(1)">Next image ▶</button>
+      <button class="ghost imgbtn off" id="prevImg" onclick="cycleImage(-1)">◀ Prev image</button>
+      <button class="ghost imgbtn off" id="nextImg" onclick="cycleImage(1)">Next image ▶</button>
       <button id="next" ${idx === list.length - 1 ? "disabled" : ""} onclick="nav(1)">Next ▶</button>
     </div>
     <div class="hint">Keyboard: → / Space next specimen · ← previous · ↑/↓ additional images · click image to zoom</div>`;
@@ -231,8 +278,8 @@ async function loadUnit(unit) {
     curPages = [];
     stage.innerHTML = `<div class="error">Could not load images for ${unit.id} (${e.message}).<br>
       Try the <a href="${MIRADOR + manifestUrl(unit.id)}" target="_blank" rel="noopener">Mirador viewer</a> directly.</div>`;
-    document.getElementById("prevImg").style.display = "none";
-    document.getElementById("nextImg").style.display = "none";
+    document.getElementById("prevImg").classList.add("off");
+    document.getElementById("nextImg").classList.add("off");
   }
 }
 
@@ -250,6 +297,16 @@ function showPage() {
   };
   stage.appendChild(img);
   if (curPages.length > 1) {
+    [["left", -1, "◀"], ["right", 1, "▶"]].forEach(([side, dir, glyph]) => {
+      const b = document.createElement("button");
+      b.className = "sidearrow " + side;
+      b.textContent = glyph;
+      b.title = (dir < 0 ? "Previous" : "Next") + " image (" + (dir < 0 ? "↑" : "↓") + ")";
+      b.onclick = e => { e.stopPropagation(); cycleImage(dir); };
+      stage.appendChild(b);
+    });
+  }
+  if (curPages.length > 1) {
     const strip = document.createElement("div");
     strip.className = "strip";
     curPages.forEach((pg, i) => {
@@ -262,9 +319,9 @@ function showPage() {
     });
     stage.appendChild(strip);
   }
-  const many = curPages.length > 1 ? "" : "none";
-  document.getElementById("prevImg").style.display = many;
-  document.getElementById("nextImg").style.display = many;
+  const many = curPages.length > 1;
+  document.getElementById("prevImg").classList.toggle("off", !many);
+  document.getElementById("nextImg").classList.toggle("off", !many);
 }
 
 /* ---------- navigation ---------- */
