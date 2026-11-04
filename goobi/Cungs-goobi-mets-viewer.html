@@ -44,9 +44,10 @@ tr.sp summary{cursor:pointer;color:var(--mut);font-size:13px}
 <p class="sub">Extracts event notes from one or more METS/MODS files, shows the pages they are on, and exports table, Darwin Core Event Core or Excel.</p>
 
 <div class="card">
-  <textarea id="urls" aria-label="METS URLs" placeholder="One METS URL (or record ID) per line">https://face.mnhn.gov.lu/viewer/sourcefile?id=MNHNL2024-6-01</textarea>
+  <textarea id="urls" aria-label="METS record IDs" placeholder="One record ID per line, e.g. MNHNL2024-6-01 (full URLs also accepted)">MNHNL2024-6-01</textarea>
   <div class="row" style="margin-top:10px">
     <button id="go">Load</button>
+    <button class="sec" id="cungs" title="Loads MNHNL2024-6-01 to MNHNL2024-6-49">Load all Cungs books (1–49)</button>
     <label class="btn sec">Open XML file(s)<input type="file" id="file" accept=".xml,text/xml" multiple hidden></label>
     <button class="sec x" id="clear">Clear all</button>
   </div>
@@ -300,6 +301,11 @@ async function loadAll(){
   res.forEach(addBlock);m.textContent='';render();
 }
 $('#go').onclick=loadAll;
+$('#cungs').onclick=()=>{
+  const ids=Array.from({length:49},(_,i)=>'MNHNL2024-6-'+String(i+1).padStart(2,'0'));
+  $('#urls').value=ids.join('\n');
+  loadAll();
+};
 $('#clear').onclick=()=>{blocks=[];$('#msg').textContent='';render()};
 $('#file').onchange=async e=>{
   for(const f of e.target.files){
