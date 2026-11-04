@@ -36,6 +36,24 @@ tr.sp summary{cursor:pointer;color:var(--mut);font-size:13px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
 .chip{border:1px solid var(--bd);background:var(--card);border-radius:14px;padding:2px 10px;font-size:13px}
 .chip b{color:var(--ac)}.chip small{color:var(--mut)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:10px}
+.pgrid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
+#pane-loc input,#pane-tax input{min-width:100px}
+#locmsg,#taxmsg{white-space:pre-line}
+.warn{color:#a5650e}
+@media (prefers-color-scheme:dark){.warn{color:#d9a13f}}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tab{background:transparent;color:var(--mut);border-color:var(--bd)}
+.tab.active{background:var(--ac);color:var(--bg)}
+.pane{border-top:1px solid var(--bd);padding-top:12px}
+details.docinfo{margin:16px 0 8px}details.docinfo summary{cursor:pointer;font-size:14px;color:var(--mut)}
+.stat{display:grid;grid-template-columns:1fr max-content 110px;gap:12px;align-items:center;margin:7px 0;font-size:14px}
+.stat .num{text-align:right;white-space:nowrap;color:var(--mut)}
+.pbar{height:9px;background:var(--bg);border:1px solid var(--bd);border-radius:5px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--ac)}
+.statgroup{margin:16px 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.types{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px;font-size:13px}
+.types span{border:1px solid var(--bd);border-radius:12px;padding:1px 9px;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -44,10 +62,10 @@ tr.sp summary{cursor:pointer;color:var(--mut);font-size:13px}
 <p class="sub">Extracts event notes from one or more METS/MODS files, shows the pages they are on, and exports table, Darwin Core Event Core or Excel.</p>
 
 <div class="card">
-  <textarea id="urls" aria-label="METS record IDs" placeholder="One record ID per line, e.g. MNHNL2024-6-01 (full URLs also accepted)">MNHNL2024-6-01</textarea>
+  <textarea id="urls" aria-label="METS record IDs or URLs" placeholder="One record ID (e.g. MNHNL2024-6-01) or full METS URL per line">MNHNL2024-6-01</textarea>
   <div class="row" style="margin-top:10px">
     <button id="go">Load</button>
-    <button class="sec" id="cungs" title="Loads MNHNL2024-6-01 to MNHNL2024-6-49">Load all Cungs books (1–49)</button>
+    <button class="sec" id="allcungs">Load all Cungs books (MNHNL2024-6-01 … 6-49)</button>
     <label class="btn sec">Open XML file(s)<input type="file" id="file" accept=".xml,text/xml" multiple hidden></label>
     <button class="sec x" id="clear">Clear all</button>
   </div>
@@ -57,6 +75,47 @@ tr.sp summary{cursor:pointer;color:var(--mut);font-size:13px}
     <p>A bare record ID such as <code>MNHNL2024-6-01</code> is expanded to <code>https://face.mnhn.gov.lu/viewer/sourcefile?id=…</code>. Loading a URL that is already shown replaces its block.</p>
   </details>
   <div id="msg"></div>
+</div>
+
+<h2 style="margin:26px 0 10px">Data curation &amp; export</h2>
+<div class="card" id="curate">
+  <div class="tabs">
+    <button class="tab active" data-tab="opts">Darwin Core export options</button>
+    <button class="tab" data-tab="loc">Localities <span class="m" id="loctotal"></span></button>
+    <button class="tab" data-tab="tax">Taxon names <span class="m" id="taxtotal"></span></button>
+    <button class="tab" data-tab="stat">Statistics</button>
+  </div>
+  <div class="pane" id="pane-opts">
+    <p class="m" style="margin:4px 0 0">Names and person IDs below are used for <code>recordedBy</code> / <code>recordedByID</code> and <code>identifiedBy</code> / <code>identifiedByID</code> on the occurrences; the ID fields contain the person ID only. For every event, <code>sampleSizeValue</code> / <code>sampleSizeUnit</code> are calculated from the event time interval, in minutes, and <code>continent</code> / <code>country</code> are filled in for Luxembourg. Only the actual observation events (with date and time) are exported; each event ID combines the general location and visit date (e.g. <code>Haardt-2007-05-24</code>) with the METS section identifier. Communes assigned in the Localities tab are exported as <code>municipality</code>, and the mapping in the Taxon names tab adds standardized names, higher taxonomy and taxon IDs to the occurrences.</p>
+    <div class="pgrid">
+      <label>Recorder name<input type="text" id="recName" value="Josy Cungs"></label>
+      <label>Recorder person ID<input type="text" id="recID" value="http://www.wikidata.org/entity/Q75005478"></label>
+      <label>Identifier name<input type="text" id="idName" value="Josy Cungs"></label>
+      <label>Identifier person ID<input type="text" id="idID" value="http://www.wikidata.org/entity/Q75005478"></label>
+    </div>
+  </div>
+  <div class="pane" id="pane-loc" hidden>
+    <p class="m" style="margin:8px 0 0;font-size:13px">Assign coordinates in decimal degrees (WGS84), a coordinate uncertainty in meters and the commune to each locality; they are exported as <code>decimalLatitude</code> / <code>decimalLongitude</code> / <code>coordinateUncertaintyInMeters</code> / <code>municipality</code> on the events of that locality. All records are in Luxembourg, so <code>country</code> = Luxembourg, <code>countryCode</code> = LU and <code>continent</code> = Europe are filled in automatically. Entries are kept in your browser; you can download the mapping as CSV to back it up or edit it externally, then import it back.</p>
+    <div class="tw" style="margin-top:10px"><table><thead><tr><th>Locality</th><th>Events</th><th>Latitude</th><th>Longitude</th><th>Uncertainty (m)</th><th>Commune</th></tr></thead><tbody id="locbody"></tbody></table></div>
+    <div class="row" style="margin-top:10px">
+      <button class="sec" id="locdl">Download mapping (CSV)</button>
+      <label class="btn sec">Import mapping (CSV)<input type="file" id="locimport" accept=".csv,text/csv" hidden></label>
+    </div>
+    <div id="locmsg" class="m" style="margin-top:8px;font-size:13px"></div>
+  </div>
+  <div class="pane" id="pane-tax" hidden>
+    <p class="m" style="margin:8px 0 0;font-size:13px">Map each taxon name as written in the documents to a standard (accepted) scientific name, its higher taxonomy and a taxon ID such as a Catalogue of Life (COL) ID. In the exports the standard name becomes <code>scientificName</code>, the original name is kept as <code>verbatimIdentification</code>, and <code>kingdom</code> / <code>phylum</code> / <code>class</code> / <code>order</code> / <code>family</code> / <code>taxonID</code> are added to the occurrences. Unmapped names are exported unchanged. Entries are kept in your browser; you can download the mapping as CSV to back it up or edit it externally, then import it back.</p>
+    <div class="tw" style="margin-top:10px"><table><thead><tr><th>Name in document</th><th>Occurrences</th><th>Standard scientific name</th><th>Kingdom</th><th>Phylum</th><th>Class</th><th>Order</th><th>Family</th><th>Taxon ID (e.g. COL)</th></tr></thead><tbody id="taxbody"></tbody></table></div>
+    <div class="row" style="margin-top:10px">
+      <button class="sec" id="taxdl">Download mapping (CSV)</button>
+      <label class="btn sec">Import mapping (CSV)<input type="file" id="taximport" accept=".csv,text/csv" hidden></label>
+    </div>
+    <div id="taxmsg" class="m" style="margin-top:8px;font-size:13px"></div>
+  </div>
+  <div class="pane" id="pane-stat" hidden>
+    <p class="m" style="margin:4px 0 0;font-size:13px">Overview of the loaded documents: how many structure elements of each type they contain, how many pages are still unassigned, and how far the curation of events, localities and taxon names has progressed. The numbers update automatically whenever records are loaded or a mapping is imported.</p>
+    <div id="stats"></div>
+  </div>
 </div>
 
 <div id="out" hidden>
@@ -94,6 +153,11 @@ const LABEL={DwCeventDate:'Date',DwCeventTime:'Time',DwClocality:'Locality',even
 const labelOf=c=>LABEL[c]||c.replace(/^DwC/,'');
 const pageUrl=(b,n)=>`${b.base}/viewer/fullscreen/${encodeURIComponent(b.docId)}/${n}/`;
 let blocks=[];
+let coords={};try{coords=JSON.parse(localStorage.getItem('mets-loc-coords')||'{}')||{}}catch(e){}
+const saveCoords=()=>{try{localStorage.setItem('mets-loc-coords',JSON.stringify(coords))}catch(e){}};
+let taxa={};try{taxa=JSON.parse(localStorage.getItem('mets-taxa-map')||'{}')||{}}catch(e){}
+const saveTaxa=()=>{try{localStorage.setItem('mets-taxa-map',JSON.stringify(taxa))}catch(e){}};
+const num=v=>{v=String(v??'').trim().replace(',','.');return v!==''&&isFinite(+v)?+v:''};
 
 function parseXml(t){
   let d=new DOMParser().parseFromString(t,'application/xml');
@@ -122,6 +186,9 @@ function parse(xml,src){
   const occsOf=s=>s?all(s,'taxonOccurrence').map(o=>{const x={};all(o,'note').forEach(n=>{const k=n.getAttribute('type');if(k)x[k]=txt(n)});return x}).filter(x=>Object.keys(x).length):[];
   const sm=all(doc,'structMap').find(s=>s.getAttribute('TYPE')==='LOGICAL');
   const logs=sm?all(sm,'div').filter(d=>d.getAttribute('ID')):[];
+  const roots=new Set();if(sm)[...sm.children].forEach(e=>{if(e.localName==='div'&&e.getAttribute('ID'))roots.add(e.getAttribute('ID'))});
+  const struct={};logs.forEach(d=>{if(roots.has(d.getAttribute('ID')))return;const t=d.getAttribute('TYPE')||'(no type)';struct[t]=(struct[t]||0)+1});
+  const linked=new Set();Object.entries(links).forEach(([from,ps])=>{if(!roots.has(from))ps.forEach(p=>{if(phys[p])linked.add(p)})});
   const rows=[],colSet=new Set();
   logs.forEach(d=>{
     const sec=dmd[d.getAttribute('DMDID')];
@@ -148,7 +215,7 @@ function parse(xml,src){
     ['Holding institution',txt(first(doc,'owner'))],['Institution site',txt(first(doc,'ownerSiteURL'))],['Contact',txt(first(doc,'ownerContact'))],
     ['METS created',hdr?hdr.getAttribute('CREATEDATE'):''],['Generated by',txt(first(doc,'name'))],['Source',src]
   ].filter(([,v])=>v!==''&&v!=null);
-  return {src,docId,base,meta,rows,cols,info,open:true,nOcc,nPages:Object.keys(phys).length};
+  return {src,docId,base,meta,rows,cols,info,open:true,nOcc,struct,nLinked:linked.size,nPages:Object.keys(phys).length};
 }
 
 /* ---------- rendering ---------- */
@@ -173,7 +240,7 @@ function blockHtml(b,i){
     <div class="row acts"><button class="x" data-act="rm" data-i="${i}">Remove</button></div></div>`;
   return `<details class="card blk" data-i="${i}" ${b.open!==false?'open':''}>
     <summary><strong>${esc(b.meta.title||b.docId)}</strong> <span class="m">· ${esc(b.docId)} · ${b.rows.length} events · ${b.nOcc} occurrences · ${b.nPages} pages</span></summary>
-    <h3>Document information</h3><dl>${b.info.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${linkify(String(v))}</dd>`).join('')}</dl>
+    <details class="docinfo"><summary>Document information <span class="m">(${b.info.length} fields)</span></summary><dl>${b.info.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${linkify(String(v))}</dd>`).join('')}</dl></details>
     <h3>Events and species</h3>${tableHtml(b)}
     <div class="row acts">
       <button class="sec" data-act="table" data-i="${i}">Table CSV</button>
@@ -182,15 +249,103 @@ function blockHtml(b,i){
       <button class="x" data-act="rm" data-i="${i}">Remove</button>
     </div></details>`;
 }
+const collectLocs=()=>{
+  const m=new Map();
+  good(blocks).forEach(b=>b.rows.forEach(r=>{const l=(r.f.DwClocality||'').trim();if(l)m.set(l,(m.get(l)||0)+1)}));
+  return [...m].sort((a,b)=>a[0].toLowerCase()<b[0].toLowerCase()?-1:a[0].toLowerCase()>b[0].toLowerCase()?1:0);
+};
+const collectTaxa=()=>{
+  const m=new Map();
+  good(blocks).forEach(b=>b.rows.forEach(r=>r.occ.forEach(o=>{const n=(o.DwCscientificName||'').trim();if(n)m.set(n,(m.get(n)||0)+1)})));
+  return [...m].sort((a,b)=>a[0].toLowerCase()<b[0].toLowerCase()?-1:a[0].toLowerCase()>b[0].toLowerCase()?1:0);
+};
+function statsHtml(){
+  const bs=good(blocks),failed=blocks.length-bs.length;
+  const pct=(a,b)=>b?Math.round(100*a/b):0;
+  const bar=(a,b)=>`<span class="pbar"><i style="width:${pct(a,b)}%"></i></span>`;
+  const row=(l,a,b)=>`<div class="stat"><span>${esc(l)}</span><span class="num">${b?a+' / '+b+' ('+pct(a,b)+'%)':'–'}</span>${b?bar(a,b):''}</div>`;
+  const info=(l,v)=>`<div class="stat"><span>${esc(l)}</span><span class="num">${v}</span><span></span></div>`;
+  const evs=bs.reduce((a,b)=>a+b.rows.length,0);
+  const struct={};bs.forEach(b=>Object.entries(b.struct||{}).forEach(([t,n])=>struct[t]=(struct[t]||0)+n));
+  const structTotal=Object.values(struct).reduce((a,b)=>a+b,0);
+  const pages=bs.reduce((a,b)=>a+(b.nPages||0),0),linked=bs.reduce((a,b)=>a+(b.nLinked||0),0);
+  const evp=bs.reduce((a,b)=>{const s=new Set();b.rows.forEach(r=>r.pages.forEach(p=>s.add(p.order)));return a+s.size},0);
+  const evo=bs.reduce((a,b)=>a+b.rows.filter(r=>r.occ&&r.occ.length>0).length,0);
+  const cnt=k=>bs.reduce((a,b)=>a+b.rows.filter(r=>(r.f[k]||'').trim()!=='').length,0);
+  const wd=cnt('DwCeventDate'),wt=cnt('DwCeventTime'),wl=cnt('DwClocality');
+  const occ=bs.reduce((a,b)=>a+b.nOcc,0);
+  const ls=collectLocs();
+  const lc=ls.filter(([l])=>{const c=coords[l];return c&&num(c.lat)!==''&&num(c.lng)!==''}).length;
+  const lm=ls.filter(([l])=>{const c=coords[l];return c&&(c.com||'').trim()!==''}).length;
+  const ts=collectTaxa();
+  const tm=ts.filter(([nm])=>{const t=taxa[nm];return t&&(t.std||'').trim()!==''}).length;
+  const th=ts.filter(([nm])=>{const t=taxa[nm]||{};return ['kingdom','phylum','class','order','family'].every(k=>(t[k]||'').trim()!=='')}).length;
+  const ti=ts.filter(([nm])=>{const t=taxa[nm];return t&&(t.id||'').trim()!==''}).length;
+  const overall=Math.round((pct(linked,pages)+pct(evp,pages)+pct(evo,evs))/3);
+  return `<p class="m" style="margin:0 0 10px">${bs.length} document${bs.length===1?'':'s'} loaded${failed?' ('+failed+' failed to load)':''}. The overall progress is the mean of pages with a structure element, pages with an event section, and event sections with observations attached.</p>`+
+    `<div class="stat"><span><strong>Overall progress</strong></span><span class="num"><strong>${overall}%</strong></span>${bar(overall,100)}</div>`+
+    '<div class="statgroup">Documents &amp; structure</div>'+
+    info('Documents loaded',bs.length)+
+    info('Structure elements (volume root excluded)',structTotal)+
+    `<div class="types">${Object.entries(struct).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<span>${esc(t)} ×${n}</span>`).join('')||'<span class="m">none</span>'}</div>`+
+    info('Pages (scans)',pages)+
+    row('Pages with a structure element assigned',linked,pages)+
+    row('Pages with an event section assigned',evp,pages)+
+    '<div class="statgroup">Events</div>'+
+    info('Event sections',evs)+
+    row('Event sections with observations attached',evo,evs)+
+    row('Event sections with date',wd,evs)+
+    row('Event sections with time',wt,evs)+
+    row('Event sections with locality',wl,evs)+
+    info('Species occurrences',occ)+
+    '<div class="statgroup">Localities</div>'+
+    info('Distinct localities',ls.length)+
+    row('Localities with coordinates',lc,ls.length)+
+    row('Localities with commune',lm,ls.length)+
+    '<div class="statgroup">Taxon names</div>'+
+    info('Distinct taxon names',ts.length)+
+    row('Names mapped to standard name',tm,ts.length)+
+    row('Names with complete higher taxonomy (kingdom–family)',th,ts.length)+
+    row('Names with taxon ID',ti,ts.length);
+}
 function render(){
   $('#out').hidden=!blocks.length;
   $('#total').textContent='('+blocks.filter(b=>!b.err).length+' loaded'+(blocks.some(b=>b.err)?', '+blocks.filter(b=>b.err).length+' failed':'')+')';
   $('#blocks').innerHTML=blocks.map(blockHtml).join('');
+  const ls=collectLocs(),mapped=ls.filter(([l])=>{const c=coords[l];return c&&num(c.lat)!==''&&num(c.lng)!==''}).length;
+  $('#loctotal').textContent=ls.length?('('+mapped+' of '+ls.length+' mapped)'):'';
+  $('#locbody').innerHTML=ls.length?ls.map(([l,n])=>{const c=coords[l]||{};
+    return '<tr><td>'+esc(l)+'</td><td class="m">'+n+'</td>'+
+      '<td><input type="text" data-loc="'+esc(l)+'" data-f="lat" value="'+esc(c.lat||'')+'" placeholder="decimal degrees"></td>'+
+      '<td><input type="text" data-loc="'+esc(l)+'" data-f="lng" value="'+esc(c.lng||'')+'" placeholder="decimal degrees"></td>'+
+      '<td><input type="text" data-loc="'+esc(l)+'" data-f="unc" value="'+esc(c.unc||'')+'" placeholder="e.g. 100"></td>'+
+      '<td><input type="text" data-loc="'+esc(l)+'" data-f="com" value="'+esc(c.com||'')+'" placeholder="e.g. Dudelange"></td></tr>';
+  }).join(''):'<tr><td colspan="6" class="m">No localities in the loaded records.</td></tr>';
+  const ts=collectTaxa(),tmap=ts.filter(([nm])=>{const t=taxa[nm];return t&&(t.std||'').trim()!==''}).length;
+  $('#taxtotal').textContent=ts.length?('('+tmap+' of '+ts.length+' mapped)'):'';
+  $('#taxbody').innerHTML=ts.length?ts.map(([nm,n])=>{const t=taxa[nm]||{},fld=f=>'<td><input type="text" data-tax="'+esc(nm)+'" data-f="'+f+'" value="'+esc(t[f]||'')+'"></td>';
+    return '<tr><td>'+esc(nm)+'</td><td class="m">'+n+'</td>'+fld('std')+fld('kingdom')+fld('phylum')+fld('class')+fld('order')+fld('family')+fld('id')+'</tr>';
+  }).join(''):'<tr><td colspan="9" class="m">No taxa in the loaded records.</td></tr>';
+  $('#stats').innerHTML=statsHtml();
 }
 
 /* ---------- exports ---------- */
 const good=bs=>bs.filter(b=>!b.err);
-const evId=(b,r)=>b.docId+'_'+(r.sec!=='—'?r.sec:r.log);
+const normDate=s=>{const m=String(s||'').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);return m?m[1]+'-'+String(+m[2]).padStart(2,'0')+'-'+String(+m[3]).padStart(2,'0'):String(s||'')};
+const clockTimes=t=>[...String(t||'').matchAll(/(\d{1,2})[.:\u2013-](\d{2})/g)].slice(0,2).map(m=>(+m[1])*60+(+m[2]));
+const timeNorm=t=>{const m=clockTimes(t);return m.length>=2?m.map(v=>Math.floor(v/60)+':'+String(v%60).padStart(2,'0')).join('/'):(t||'').trim()};
+const eventMinutes=t=>{const m=clockTimes(t);if(m.length<2)return'';const d=m[1]<m[0]?m[1]-m[0]+1440:m[1]-m[0];return d>0?String(d):''};
+const generalLoc=(f,b)=>{
+  let g=((f.DwClocality||'').trim().split(/\s+/)[0])||'';
+  if(!g){const p=(b.meta.title||'').split(':')[1];g=p?p.trim().split(/\s+/)[0]:''}
+  g=g.toLowerCase().replace(/[^a-z0-9-]/g,'');
+  return g?g[0].toUpperCase()+g.slice(1):b.docId;
+};
+const people=()=>{
+  const v=(n,i)=>{const name=$('#'+n).value.trim(),id=$('#'+i).value.trim();return{name,ref:id}};
+  const rec=v('recName','recID'),ide=v('idName','idID');
+  return {rec:rec.name,recID:rec.ref,idn:ide.name,idID:ide.ref};
+};
 function tableData(bs){
   const set=new Set();good(bs).forEach(b=>b.cols.forEach(c=>set.add(c)));
   const cols=[...PREF.filter(c=>set.has(c)),...[...set].filter(c=>!PREF.includes(c)).sort()];
@@ -201,26 +356,34 @@ function tableData(bs){
     r.occ.map(o=>(o.DwCscientificName||'')+(o.DwCindividualCount?' ('+o.DwCindividualCount+')':'')).join('; ')])));
   return {head,body};
 }
-const EVENT_COLS=['eventID','parentEventID','eventDate','eventTime','year','month','day','locality','countryCode','recordedBy','datasetName','eventRemarks','dynamicProperties','associatedMedia','references'];
-const OCC_BASE=['eventID','occurrenceID','basisOfRecord','occurrenceStatus','scientificName','individualCount','occurrenceRemarks'];
+const EVENT_COLS=['eventID','eventDate','eventTime','year','month','day','locality','municipality','countryCode','country','continent','decimalLatitude','decimalLongitude','coordinateUncertaintyInMeters','sampleSizeValue','sampleSizeUnit','datasetName','dynamicProperties','associatedMedia','references'];
+const OCC_BASE=['eventID','occurrenceID','basisOfRecord','occurrenceStatus','scientificName','verbatimIdentification','kingdom','phylum','class','order','family','taxonID','recordedBy','recordedByID','identifiedBy','identifiedByID','dateIdentified','individualCount','occurrenceRemarks'];
 function dwcData(bs){
-  const ev=[],oc=[],extra=new Set();
+  const P=people(),ev=[],oc=[],extra=new Set();
   good(bs).forEach(b=>{
-    ev.push({eventID:b.docId,datasetName:b.meta.title,eventDate:b.meta.year,year:b.meta.year,recordedBy:b.meta.by,
-      eventRemarks:b.meta.desc,countryCode:'LU',references:pageUrl(b,1)});
     b.rows.forEach(r=>{
-      const f=r.f,d=(f.DwCeventDate||'').match(/^(\d{4})-(\d\d)-(\d\d)$/),dp={},id=evId(b,r);
+      const f=r.f,date=normDate(f.DwCeventDate),d=date.match(/^(\d{4})-(\d\d)-(\d\d)$/),dp={};
+      const gl=generalLoc(f,b),id=(date?gl+'-'+date:gl)+'_'+(r.sec!=='—'?r.sec:r.log);
       if(f.eventTemperature)dp.temperatureCelsius=isNaN(+f.eventTemperature)?f.eventTemperature:+f.eventTemperature;
       if(f.eventWeather)dp.weather=f.eventWeather;
       Object.keys(f).filter(k=>!PREF.includes(k)).forEach(k=>dp[k]=f[k]);
-      ev.push({eventID:id,parentEventID:b.docId,
-        eventDate:f.DwCeventDate||'',eventTime:(f.DwCeventTime||'').replace(/\s*[-–]\s*/,'/'),
-        year:d?d[1]:'',month:d?+d[2]:'',day:d?+d[3]:'',locality:f.DwClocality||'',countryCode:'LU',
-        recordedBy:b.meta.by,datasetName:b.meta.title,dynamicProperties:Object.keys(dp).length?JSON.stringify(dp):'',
+      const mins=eventMinutes(f.DwCeventTime),co=(f.DwClocality||'').trim()?coords[(f.DwClocality||'').trim()]||{}:{};
+      const la=num(co.lat),lo=num(co.lng),xy=la!==''&&lo!=='';
+      ev.push({eventID:id,
+        eventDate:date,eventTime:timeNorm(f.DwCeventTime),
+        year:d?d[1]:'',month:d?+d[2]:'',day:d?+d[3]:'',locality:f.DwClocality||'',municipality:co.com||'',countryCode:'LU',country:'Luxembourg',continent:'Europe',
+        decimalLatitude:xy?la:'',decimalLongitude:xy?lo:'',coordinateUncertaintyInMeters:xy?num(co.unc):'',
+        sampleSizeValue:mins,sampleSizeUnit:mins?'minute':'',
+        datasetName:b.meta.title,dynamicProperties:Object.keys(dp).length?JSON.stringify(dp):'',
         associatedMedia:r.pages.map(p=>pageUrl(b,p.order)).join(' | '),references:r.pages.length?pageUrl(b,r.pages[0].order):''});
       r.occ.forEach((o,n)=>{
+        const raw=(o.DwCscientificName||'').trim(),tm=raw?taxa[raw]||{}:{};
         const x={eventID:id,occurrenceID:id+'_occ'+String(n+1).padStart(2,'0'),basisOfRecord:'HumanObservation',occurrenceStatus:'present',
-          scientificName:o.DwCscientificName||'',individualCount:o.DwCindividualCount||'',occurrenceRemarks:o.DwCoccurrenceRemarks||''};
+          scientificName:(tm.std||'').trim()||o.DwCscientificName||'',verbatimIdentification:raw,
+          kingdom:tm.kingdom||'',phylum:tm.phylum||'',class:tm['class']||'',order:tm.order||'',family:tm.family||'',taxonID:tm.id||'',
+          recordedBy:P.rec,recordedByID:P.recID,
+          identifiedBy:P.idn,identifiedByID:P.idID,dateIdentified:date,
+          individualCount:o.DwCindividualCount||'',occurrenceRemarks:o.DwCoccurrenceRemarks||''};
         Object.keys(o).filter(k=>!KNOWN_OCC.includes(k)&&/^DwC/.test(k)).forEach(k=>{const t=k.replace(/^DwC/,'');t&&(x[t]=o[k],extra.add(t))});
         oc.push(x);
       });
@@ -230,6 +393,25 @@ function dwcData(bs){
   return {events:{head:EVENT_COLS,body:ev.map(o=>EVENT_COLS.map(c=>o[c]??''))},occs:{head:oCols,body:oc.map(o=>oCols.map(c=>o[c]??''))}};
 }
 const csvText=({head,body},bom)=>{const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';return (bom?'\ufeff':'')+[head,...body].map(r=>r.map(q).join(',')).join('\n')+'\n'};
+const csvDelim=t=>{
+  const line=String(t).split(/\r?\n/)[0]||'';
+  let q=false;const n={';':0,',':0,'\t':0};
+  for(const c of line){if(c==='"')q=!q;else if(!q&&c in n)n[c]++}
+  let best=',';for(const d of ['\t',';',','])if(n[d]>n[best])best=d;
+  return n[best]>0?best:',';
+};
+const parseCsv=(t,d)=>{
+  t=String(t).replace(/^\ufeff/,'');d=d||csvDelim(t);
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;
+    else if(c===d){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}
+    else f+=c}
+  if(f!==''||row.length){row.push(f);rows.push(row)}
+  return rows.filter(r=>!(r.length===1&&r[0]===''));
+};
 const TERM=n=>n==='references'?'http://purl.org/dc/terms/references':'http://rs.tdwg.org/dwc/terms/'+n;
 function metaXml(d){
   const fields=(cols,from)=>cols.map((c,i)=>i>=from?`    <field index="${i}" term="${TERM(c)}"/>\n`:'').join('');
@@ -301,11 +483,11 @@ async function loadAll(){
   res.forEach(addBlock);m.textContent='';render();
 }
 $('#go').onclick=loadAll;
-$('#cungs').onclick=()=>{
-  const ids=Array.from({length:49},(_,i)=>'MNHNL2024-6-'+String(i+1).padStart(2,'0'));
-  $('#urls').value=ids.join('\n');
-  loadAll();
-};
+const cungsIds=[];for(let n=1;n<=49;n++)cungsIds.push('MNHNL2024-6-'+String(n).padStart(2,'0'));
+$('#allcungs').onclick=()=>{$('#urls').value=cungsIds.join('\n');loadAll()};
+$('#curate').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;
+  document.querySelectorAll('#curate .tab').forEach(b=>b.classList.toggle('active',b===t));
+  document.querySelectorAll('#curate .pane').forEach(p=>p.hidden=p.id!=='pane-'+t.dataset.tab)});
 $('#clear').onclick=()=>{blocks=[];$('#msg').textContent='';render()};
 $('#file').onchange=async e=>{
   for(const f of e.target.files){
@@ -314,6 +496,109 @@ $('#file').onchange=async e=>{
   e.target.value='';render();
 };
 $('#blocks').addEventListener('toggle',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!=null&&blocks[i])blocks[i].open=e.target.open},true);
+$('#locbody').addEventListener('input',e=>{const t=e.target,loc=t.dataset&&t.dataset.loc;if(!loc)return;
+  (coords[loc]=coords[loc]||{})[t.dataset.f]=t.value.trim();saveCoords()});
+const locCsv=()=>{
+  const keys=new Set([...collectLocs().map(([l])=>l),...Object.keys(coords)]);
+  const head=['locality','decimalLatitude','decimalLongitude','coordinateUncertaintyInMeters','municipality'];
+  const body=[...keys].sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:a.toLowerCase()>b.toLowerCase()?1:0)
+    .map(l=>{const c=coords[l]||{};return [l,c.lat||'',c.lng||'',c.unc||'',c.com||'']});
+  save('location-coordinates.csv',new Blob([csvText({head,body},true)],{type:'text/csv'}));
+};
+$('#locdl').onclick=locCsv;
+$('#locimport').onchange=async e=>{
+  const f=e.target.files[0],m=$('#locmsg');
+  const say=(t,c)=>{m.className=c||'m';m.textContent=t};
+  if(!f){e.target.value='';return}
+  say('Importing…');
+  try{
+    const text=await f.text();
+    if(/^PK\u0003\u0004/.test(text))throw new Error('This is an Excel workbook (.xlsx/.xls), not a CSV file. In Excel use File > Save as > CSV UTF-8 (or CSV) and upload that file.');
+    if(text.indexOf('\u0000')>=0)throw new Error('This file is not UTF-8 text (it looks like Excel "Unicode Text" / UTF-16). Save it as CSV UTF-8 and upload again.');
+    const rows=parseCsv(text);
+    if(rows.length<2)throw new Error('no data rows found');
+    const head=rows[0].map(h=>h.trim().toLowerCase());
+    const pick=(...a)=>head.findIndex(h=>a.includes(h));
+    const cLoc=pick('locality','location','name'),cLat=pick('decimallatitude','latitude','lat'),
+      cLng=pick('decimallongitude','longitude','lng','long'),cUnc=pick('coordinateuncertaintyinmeters','uncertaintyinmeters','uncertainty','unc'),cCom=pick('municipality','commune');
+    if(cLoc<0||cLat<0||cLng<0)throw new Error('header must contain the columns locality, decimalLatitude and decimalLongitude, separated by ",", ";" or tab. Detected separator "'+(csvDelim(text)==='\t'?'tab':csvDelim(text))+'"; found columns: '+(head.filter(Boolean).join(' | ')||'none'));
+    const clean=v=>String(v??'').replace(/\s+/g,'').replace(/,/g,'.');
+    const round5=v=>{v=clean(v);return v!==''&&isFinite(+v)?String(+(+v).toFixed(5)):v};
+    const warns=[];let n=0;
+    rows.slice(1).forEach((r,i)=>{
+      const l=(r[cLoc]||'').trim();
+      if(!l){warns.push('row '+(i+2)+' has an empty locality and was skipped');return}
+      const c=coords[l]=coords[l]||{};
+      if(r[cLat]!==''||r[cLng]!==''){c.lat=round5(r[cLat]);c.lng=round5(r[cLng])}
+      if(cUnc>=0&&String(r[cUnc]||'').trim()!=='')c.unc=clean(r[cUnc]);
+      if(cCom>=0&&String(r[cCom]||'').trim()!=='')c.com=String(r[cCom]||'').trim();
+      const bad=[];
+      if(c.lat!==''&&num(c.lat)==='')bad.push('latitude "'+c.lat+'" is not a number');
+      else if(c.lat!==''&&Math.abs(num(c.lat))>90)bad.push('latitude '+c.lat+' is outside -90 to 90');
+      if(c.lng!==''&&num(c.lng)==='')bad.push('longitude "'+c.lng+'" is not a number');
+      else if(c.lng!==''&&Math.abs(num(c.lng))>180)bad.push('longitude '+c.lng+' is outside -180 to 180');
+      if((c.lat!=='')!==(c.lng!==''))bad.push('only one of latitude/longitude is set');
+      if(c.unc!==''&&num(c.unc)==='')bad.push('uncertainty "'+c.unc+'" is not a number');
+      if(bad.length)warns.push('"'+l+'" (row '+(i+2)+'): '+bad.join(', '));
+      n++;
+    });
+    const inRec=new Set(collectLocs().map(([l])=>l)),csvLocs=new Set();
+    rows.slice(1).forEach(r=>{const l=(r[cLoc]||'').trim();if(l)csvLocs.add(l)});
+    const extra=[...csvLocs].filter(l=>!inRec.has(l));
+    if(extra.length)warns.push('not in the loaded records (stored anyway): '+extra.map(l=>'"'+l+'"').join(', '));
+    const miss=[...inRec].filter(l=>!csvLocs.has(l));
+    if(miss.length)warns.push(miss.length+' loaded localit'+(miss.length===1?'y is':'ies are')+' missing from the file (their mappings are kept): '+miss.map(l=>'"'+l+'"').join(', '));
+    saveCoords();render();
+    say('Imported coordinates for '+n+' localit'+(n===1?'y':'ies')+'.'+(warns.length?'\nWarnings:\n- '+warns.join('\n- '):''),warns.length?'warn':'');
+  }catch(x){say('Import failed: '+x.message,'err')}
+  e.target.value='';
+};
+$('#taxbody').addEventListener('input',e=>{const t=e.target,nm=t.dataset&&t.dataset.tax;if(!nm)return;
+  (taxa[nm]=taxa[nm]||{})[t.dataset.f]=t.value.trim();saveTaxa()});
+const TAXON_FIELDS=[['std','scientificName'],['kingdom','kingdom'],['phylum','phylum'],['class','class'],['order','order'],['family','family'],['id','taxonID']];
+const taxaCsv=()=>{
+  const keys=new Set([...collectTaxa().map(([nm])=>nm),...Object.keys(taxa)]);
+  const head=['verbatimIdentification',...TAXON_FIELDS.map(([,d])=>d)];
+  const body=[...keys].sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:a.toLowerCase()>b.toLowerCase()?1:0)
+    .map(nm=>{const t=taxa[nm]||{};return [nm,...TAXON_FIELDS.map(([k])=>t[k]||'')]});
+  save('taxon-mapping.csv',new Blob([csvText({head,body},true)],{type:'text/csv'}));
+};
+$('#taxdl').onclick=taxaCsv;
+$('#taximport').onchange=async e=>{
+  const f=e.target.files[0],m=$('#taxmsg');
+  const say=(t,c)=>{m.className=c||'m';m.textContent=t};
+  if(!f){e.target.value='';return}
+  say('Importing…');
+  try{
+    const text=await f.text();
+    if(/^PK\u0003\u0004/.test(text))throw new Error('This is an Excel workbook (.xlsx/.xls), not a CSV file. In Excel use File > Save as > CSV UTF-8 (or CSV) and upload that file.');
+    if(text.indexOf('\u0000')>=0)throw new Error('This file is not UTF-8 text (it looks like Excel "Unicode Text" / UTF-16). Save it as CSV UTF-8 and upload again.');
+    const rows=parseCsv(text);
+    if(rows.length<2)throw new Error('no data rows found');
+    const head=rows[0].map(h=>h.trim().toLowerCase());
+    const pick=(...a)=>head.findIndex(h=>a.includes(h));
+    const cName=pick('verbatimidentification','verbatimname','verbatimscientificname','name','originalname');
+    if(cName<0)throw new Error('header must contain a name column (verbatimIdentification, verbatimName or name), separated by ",", ";" or tab. Found columns: '+(head.filter(Boolean).join(' | ')||'none'));
+    const cols=TAXON_FIELDS.map(([,d],j)=>pick(...{0:['scientificname','standardscientificname','acceptedname','acceptedscientificname'],1:['kingdom'],2:['phylum','division'],3:['class'],4:['order'],5:['family'],6:['taxonid','colid','col']}[j]));
+    const warns=[];let n=0;
+    rows.slice(1).forEach((r,i)=>{
+      const nm=(r[cName]||'').trim();
+      if(!nm){warns.push('row '+(i+2)+' has an empty name and was skipped');return}
+      const t=taxa[nm]=taxa[nm]||{};
+      TAXON_FIELDS.forEach(([k],j)=>{if(cols[j]>=0&&String(r[cols[j]]||'').trim()!=='')t[k]=String(r[cols[j]]||'').trim()});
+      n++;
+    });
+    const inRec=new Set(collectTaxa().map(([nm])=>nm)),csvTaxa=new Set();
+    rows.slice(1).forEach(r=>{const nm=(r[cName]||'').trim();if(nm)csvTaxa.add(nm)});
+    const extra=[...csvTaxa].filter(nm=>!inRec.has(nm));
+    if(extra.length)warns.push('not in the loaded records (stored anyway): '+extra.map(nm=>'"'+nm+'"').join(', '));
+    const miss=[...inRec].filter(nm=>!csvTaxa.has(nm));
+    if(miss.length)warns.push(miss.length+' loaded name'+(miss.length===1?' is':'s are')+' missing from the file (their mappings are kept): '+miss.map(nm=>'"'+nm+'"').join(', '));
+    saveTaxa();render();
+    say('Imported mapping for '+n+' name'+(n===1?'':'s')+'.'+(warns.length?'\nWarnings:\n- '+warns.join('\n- '):''),warns.length?'warn':'');
+  }catch(x){say('Import failed: '+x.message,'err')}
+  e.target.value='';
+};
 $('#out').addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   const act=t.dataset.act,i=t.dataset.i;
@@ -324,6 +609,7 @@ $('#out').addEventListener('click',e=>{
 });
 const qp=new URLSearchParams(location.search).getAll('url');
 if(qp.length){$('#urls').value=qp.join('\n');loadAll()}
+render();
 </script>
 </body>
 </html>
