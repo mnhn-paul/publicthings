@@ -216,10 +216,25 @@ body.has-pt-nav{padding-top:0!important;margin-top:0!important}
 }
 .pt-brand:hover{color:var(--greenlight)}
 .pt-brand img{width:24px;height:24px;display:block}
-.pt-links{display:flex;align-items:center;gap:2px;flex:none;overflow-x:auto;scrollbar-width:none}
+.pt-links{display:flex;align-items:center;gap:2px;flex:none;overflow:visible}
 .pt-link{color:#CDE4CA;text-decoration:none;padding:7px 10px;border-radius:0;white-space:nowrap}
 .pt-link:hover{background:rgba(153,204,153,.16);color:#FFFFFF}
 .pt-link.active{background:var(--greenlight);color:var(--nuit)}
+/* folder menu points: button opens a dropdown with the folder's tools */
+.pt-group{position:relative;display:inline-flex;flex:none}
+.pt-group-btn{cursor:pointer;background:none;border:0;font:inherit;display:inline-flex;align-items:center;gap:5px}
+.pt-caret{width:11px;height:11px;display:block;transition:transform .12s}
+.pt-group:hover .pt-caret,.pt-group:focus-within .pt-caret,.pt-group.open .pt-caret{transform:rotate(180deg)}
+.pt-sub{
+  position:absolute;top:100%;left:0;z-index:120;
+  display:none;flex-direction:column;min-width:250px;max-width:330px;
+  padding:6px;background:var(--nuit);
+  border:1px solid rgba(255,255,255,.16);box-shadow:var(--sh);
+}
+.pt-group:hover .pt-sub,.pt-group:focus-within .pt-sub,.pt-group.open .pt-sub{display:flex}
+.pt-sub-link{color:#CDE4CA;text-decoration:none;padding:8px 11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-sub-link:hover{background:rgba(153,204,153,.16);color:#FFFFFF}
+.pt-sub-link.active{background:var(--greenlight);color:var(--nuit)}
 .pt-current{flex:1;display:flex;align-items:baseline;gap:10px;min-width:0;white-space:nowrap;overflow:hidden}
 .pt-name{color:#FFFFFF;font-weight:800;font-size:14.5px;flex:none}
 .pt-desc{color:var(--hdr-sub);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

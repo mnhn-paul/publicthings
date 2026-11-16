@@ -28,24 +28,35 @@
   var src = (document.currentScript && document.currentScript.src) || '';
   var root = src.split('assets/nav.js')[0] || './';
 
-  var PAGES = [
-    { path: 'index.html', label: 'Overview', desc: 'Tools and pages published in this repository via GitHub Pages.' },
-    { path: 'gbif IPT lux.html', label: 'GBIF ↔ IPT', desc: 'Datasets hosted on the MNHNL IPT — GBIF registry vs. IPT publication status.' },
-    { path: 'mnhnl-checklists-overview.html', label: 'Checklists', desc: 'Checklist datasets published by MNHNL on ChecklistBank — select and download merged taxa tables.' },
-    { path: 'data_public/MNHNL_dataPublic_dashboard.html', label: 'data.public', desc: 'Insights into the datasets MNHNL publishes on the Luxembourg open data portal.' },
-    { path: 'goobi/Cungs-goobi-mets-viewer.html', label: 'METS viewer', desc: 'Extracts event notes from METS/MODS files and exports table, DwC Event Core or Excel.' },
-    { path: 'goobi/Digiento-viewer.html', label: 'Specimen browser', desc: 'Browse boxes and specimens from face.mnhn.gov.lu.' }
+  /* The repo's folders are the main menu points; the tools inside each
+     folder are the submenu entries of that folder's menu point. */
+  var GROUPS = [
+    { folder: 'GBIF - COL', tools: [
+      { path: 'GBIF - COL/gbif IPT lux.html', label: 'GBIF ↔ IPT', desc: 'Datasets hosted on the MNHNL IPT — GBIF registry vs. IPT publication status.' },
+      { path: 'GBIF - COL/mnhnl-checklists-overview.html', label: 'Checklists', desc: 'Checklist datasets published by MNHNL on ChecklistBank — select and download merged taxa tables.' }
+    ]},
+    { folder: 'data.public', tools: [
+      { path: 'data.public/MNHNL_dataPublic_dashboard.html', label: 'Dashboard', desc: 'Insights into the datasets MNHNL publishes on the Luxembourg open data portal.' }
+    ]},
+    { folder: 'Goobi', tools: [
+      { path: 'Goobi/Cungs-goobi-mets-viewer.html', label: 'METS viewer', desc: 'Extracts event notes from METS/MODS files and exports table, DwC Event Core or Excel.' },
+      { path: 'Goobi/Digiento-viewer.html', label: 'Specimen browser', desc: 'Browse boxes and specimens from face.mnhn.gov.lu.' }
+    ]}
   ];
+  var PAGES = [{ path: 'index.html', label: 'Overview', desc: 'Tools and pages published in this repository via GitHub Pages.' }]
+    .concat(GROUPS.reduce(function (acc, g) { return acc.concat(g.tools); }, []));
 
   /* page title/description blocks that get folded into the top bar */
   var FOLD = {
     'index.html': ['main>h1', 'main>p.sub'],
-    'gbif IPT lux.html': ['body>header'],
-    'mnhnl-checklists-overview.html': ['body>header'],
-    'data_public/MNHNL_dataPublic_dashboard.html': ['body>h1', 'body>.subtitle'],
-    'goobi/Cungs-goobi-mets-viewer.html': ['main>header.hdr'],
-    'goobi/Digiento-viewer.html': ['body>header h1']
+    'GBIF - COL/gbif IPT lux.html': ['body>header'],
+    'GBIF - COL/mnhnl-checklists-overview.html': ['body>header'],
+    'data.public/MNHNL_dataPublic_dashboard.html': ['body>h1', 'body>.subtitle'],
+    'Goobi/Cungs-goobi-mets-viewer.html': ['main>header.hdr'],
+    'Goobi/Digiento-viewer.html': ['body>header h1']
   };
+
+  var CARET = '<svg class="pt-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
   var ORDER = ['auto', 'light', 'dark'];
   var ICONS = {
@@ -54,13 +65,14 @@
     dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>'
   };
 
-  function currentFile() {
-    var seg = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || 'index.html');
-    return /\.html?$/i.test(seg) ? seg : 'index.html';
-  }
+  /* Match the full repo-relative path (folder + file) against the URL,
+     so pages with the same file name in different folders stay distinct. */
   function currentPath() {
-    var here = currentFile();
-    return PAGES.map(function (p) { return p.path; }).filter(function (p) { return p.split('/').pop() === here; })[0] || 'index.html';
+    var path = decodeURIComponent(location.pathname).replace(/\/+/g, '/');
+    var hit = PAGES.map(function (p) { return p.path; }).filter(function (p) {
+      return path === '/' + p || path.slice(-(p.length + 1)) === '/' + p;
+    })[0];
+    return hit || 'index.html';
   }
   function pageMeta(full) {
     var p = PAGES.filter(function (x) { return x.path === full; })[0] || {};
@@ -79,7 +91,7 @@
     if (document.querySelector('.pt-nav')) return;
     document.body.classList.add('has-pt-nav');
 
-    var full = currentPath(), here = currentFile();
+    var full = currentPath();
     (FOLD[full] || []).forEach(function (sel) {
       document.querySelectorAll(sel).forEach(function (e) { e.classList.add('pt-folded'); });
     });
@@ -90,21 +102,61 @@
     nav.setAttribute('aria-label', 'publicthings tools');
 
     var brand = document.createElement('a');
-    brand.className = 'pt-brand' + (here === 'index.html' ? ' active' : '');
+    brand.className = 'pt-brand' + (full === 'index.html' ? ' active' : '');
     brand.href = root + 'index.html';
     brand.title = 'Back to the publicthings overview';
     brand.innerHTML = '<img src="' + root + 'assets/favicon.svg" alt=""><span>publicthings</span>';
     nav.appendChild(brand);
 
+    /* one menu point per folder, with the folder's tools as submenu */
     var links = document.createElement('span');
     links.className = 'pt-links';
-    PAGES.forEach(function (p) {
-      if (p.path === 'index.html') return; /* overview = brand link */
-      var a = document.createElement('a');
-      a.className = 'pt-link' + (here === p.path.split('/').pop() ? ' active' : '');
-      a.href = root + encodeURI(p.path);
-      a.textContent = p.label;
-      links.appendChild(a);
+    GROUPS.forEach(function (g) {
+      var grp = document.createElement('span');
+      grp.className = 'pt-group';
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pt-link pt-group-btn' + (g.tools.some(function (t) { return t.path === full; }) ? ' active' : '');
+      btn.setAttribute('aria-haspopup', 'true');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.innerHTML = '<span>' + g.folder + '</span>' + CARET;
+
+      var sub = document.createElement('span');
+      sub.className = 'pt-sub';
+      sub.setAttribute('role', 'menu');
+      g.tools.forEach(function (t) {
+        var a = document.createElement('a');
+        a.className = 'pt-sub-link' + (t.path === full ? ' active' : '');
+        a.setAttribute('role', 'menuitem');
+        a.href = root + encodeURI(t.path);
+        a.textContent = t.label;
+        a.title = t.desc;
+        sub.appendChild(a);
+      });
+
+      btn.addEventListener('click', function () {
+        var open = grp.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      btn.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          grp.classList.remove('open');
+          btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      grp.appendChild(btn);
+      grp.appendChild(sub);
+      links.appendChild(grp);
+    });
+    document.addEventListener('click', function (e) {
+      links.querySelectorAll('.pt-group.open').forEach(function (grp) {
+        if (!grp.contains(e.target)) {
+          grp.classList.remove('open');
+          grp.querySelector('.pt-group-btn').setAttribute('aria-expanded', 'false');
+        }
+      });
     });
     nav.appendChild(links);
 
