@@ -180,8 +180,8 @@ document.documentElement.dataset.theme=p;})();
     <div id="locmsg" class="m" style="margin-top:8px;font-size:13px"></div>
   </div>
   <div class="pane" id="pane-tax" hidden>
-    <p class="m" style="margin:8px 0 0;font-size:13px">Map each taxon name as written in the documents to a standard (accepted) scientific name, its higher taxonomy and a taxon ID such as a Catalogue of Life (COL) ID. In the exports the standard name becomes <code>scientificName</code>, the original name is kept as <code>verbatimIdentification</code>, and <code>kingdom</code> / <code>phylum</code> / <code>class</code> / <code>order</code> / <code>family</code> / <code>taxonID</code> are added to the occurrences. Unmapped names are exported unchanged. Entries are kept in your browser; you can download the mapping as CSV to back it up or edit it externally, then import it back.</p>
-    <div class="tw" style="margin-top:10px"><table><thead><tr><th>Name in document</th><th>Occurrences</th><th>Standard scientific name</th><th>Kingdom</th><th>Phylum</th><th>Class</th><th>Order</th><th>Family</th><th>Taxon ID (e.g. COL)</th></tr></thead><tbody id="taxbody"></tbody></table></div>
+    <p class="m" style="margin:8px 0 0;font-size:13px">Map each taxon name as written in the documents to a standard (accepted) scientific name, its higher taxonomy and a taxon ID such as a Catalogue of Life (COL) ID. In the exports the standard name becomes <code>scientificName</code>, the original name is kept as <code>verbatimIdentification</code>, and <code>kingdom</code> / <code>phylum</code> / <code>class</code> / <code>order</code> / <code>family</code> / <code>taxonID</code> are added to the occurrences. Unmapped names are exported unchanged. CSV exports from the GBIF/CoL species match are recognised directly: <code>verbatimScientificName</code> is used as the name in the document, <code>scientificName</code> as the standard name, and <code>acceptedUsageKey</code> / <code>usageKey</code> / <code>key</code> as the taxon ID when present. Entries are kept in your browser; you can download the mapping as CSV to back it up or edit it externally, then import it back.</p>
+    <div class="tw" style="margin-top:10px"><table><thead><tr><th>Name in document</th><th>Occurrences</th><th>Standard scientific name</th><th>Kingdom</th><th>Phylum</th><th>Class</th><th>Order</th><th>Family</th><th>Taxon ID (CoL/GBIF)</th></tr></thead><tbody id="taxbody"></tbody></table></div>
     <div class="row" style="margin-top:10px">
       <button class="sec" id="taxdl">Download mapping (CSV)</button>
       <label class="btn sec">Import mapping (CSV)<input type="file" id="taximport" accept=".csv,text/csv" hidden></label>
@@ -660,13 +660,23 @@ $('#taximport').onchange=async e=>{
     const pick=(...a)=>head.findIndex(h=>a.includes(h));
     const cName=pick('verbatimidentification','verbatimname','verbatimscientificname','name','originalname');
     if(cName<0)throw new Error('header must contain a name column (verbatimIdentification, verbatimName or name), separated by ",", ";" or tab. Found columns: '+(head.filter(Boolean).join(' | ')||'none'));
-    const cols=TAXON_FIELDS.map(([,d],j)=>pick(...{0:['scientificname','standardscientificname','acceptedname','acceptedscientificname'],1:['kingdom'],2:['phylum','division'],3:['class'],4:['order'],5:['family'],6:['taxonid','colid','col']}[j]));
-    const warns=[];let n=0;
+    /* taxon ID: own DwC/CoL columns first, then GBIF/CoL species-match columns
+       (acceptedUsageKey = accepted taxon, usageKey/key = matched taxon); per row
+       the first non-empty column in this priority order wins */
+    const ID_GROUPS=[['taxonid','colid','col'],['acceptedusagekey','acceptedusage'],['usagekey','gbifusagekey'],['key','colkey','gbifkey','specieskey']];
+    const idCols=[];for(const g of ID_GROUPS)for(const h of g){const i=head.indexOf(h);if(i>=0&&idCols.indexOf(i)<0)idCols.push(i)}
+    const cols=TAXON_FIELDS.map(([,d],j)=>j===6?-1:pick(...{0:['scientificname','standardscientificname','acceptedname','acceptedscientificname','canonicalname'],1:['kingdom'],2:['phylum','division'],3:['class'],4:['order'],5:['family']}[j]));
+    const warns=[];let n=0,nId=0;
     rows.slice(1).forEach((r,i)=>{
       const nm=(r[cName]||'').trim();
       if(!nm){warns.push('row '+(i+2)+' has an empty name and was skipped');return}
       const t=taxa[nm]=taxa[nm]||{};
-      TAXON_FIELDS.forEach(([k],j)=>{if(cols[j]>=0&&String(r[cols[j]]||'').trim()!=='')t[k]=String(r[cols[j]]||'').trim()});
+      let gotId=false;
+      TAXON_FIELDS.forEach(([k],j)=>{
+        if(j===6){const v=idCols.map(c=>String(r[c]||'').trim()).find(v=>v!=='');if(v){t.id=v;gotId=true}return}
+        if(cols[j]>=0&&String(r[cols[j]]||'').trim()!=='')t[k]=String(r[cols[j]]||'').trim();
+      });
+      if(gotId)nId++;
       n++;
     });
     const inRec=new Set(collectTaxa().map(([nm])=>nm)),csvTaxa=new Set();
@@ -676,7 +686,7 @@ $('#taximport').onchange=async e=>{
     const miss=[...inRec].filter(nm=>!csvTaxa.has(nm));
     if(miss.length)warns.push(miss.length+' loaded name'+(miss.length===1?' is':'s are')+' missing from the file (their mappings are kept): '+miss.map(nm=>'"'+nm+'"').join(', '));
     saveTaxa();render();
-    say('Imported mapping for '+n+' name'+(n===1?'':'s')+'.'+(warns.length?'\nWarnings:\n- '+warns.join('\n- '):''),warns.length?'warn':'');
+    say('Imported mapping for '+n+' name'+(n===1?'':'s')+(nId?' — '+nId+' with a taxon ID (GBIF/CoL key)':'')+'.'+(warns.length?'\nWarnings:\n- '+warns.join('\n- '):''),warns.length?'warn':'');
   }catch(x){say('Import failed: '+x.message,'err')}
   e.target.value='';
 };
