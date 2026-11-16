@@ -140,6 +140,17 @@
     nav.appendChild(btn);
 
     document.body.insertBefore(nav, document.body.firstChild);
+
+    /* full-bleed bar: cancel whatever horizontal margin/padding the page
+       puts on <body> (varies per tool), so the bar always spans the
+       whole viewport width; recompute on resize (media queries) */
+    function fit() {
+      var cs = getComputedStyle(document.body);
+      nav.style.marginLeft = 'calc((' + cs.marginLeft + ' + ' + cs.paddingLeft + ') * -1)';
+      nav.style.marginRight = 'calc((' + cs.marginRight + ' + ' + cs.paddingRight + ') * -1)';
+    }
+    fit();
+    window.addEventListener('resize', fit);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
