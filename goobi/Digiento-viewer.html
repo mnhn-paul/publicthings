@@ -4,12 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MNHNL Specimen Browser</title>
+<link rel="stylesheet" href="../assets/theme.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <style>
-  :root { --bg:#f4f2ec; --panel:#fff; --ink:#24312b; --muted:#6b7a72;
-          --accent:#2e6e4e; --accent2:#8fbc9f; --line:#e0ddd2; --mark:#b4770f; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-         background:var(--bg); color:var(--ink); }
+  body { margin:0; background:var(--bg); color:var(--ink); }
   header { background:var(--panel); border-bottom:2px solid var(--accent);
            padding:14px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
   header h1 { font-size:19px; margin:0; }
@@ -24,12 +23,12 @@
   .boxes { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
   .boxcard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
              padding:18px; cursor:pointer; transition:box-shadow .15s, transform .15s; }
-  .boxcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
+  .boxcard:hover { box-shadow:var(--sh); transform:translateY(-2px); }
   .boxcard .name { font-size:21px; font-weight:700; color:var(--accent); }
   .boxcard .count { color:var(--muted); font-size:13px; margin-top:4px; }
   .boxcard .mosaic { display:flex; gap:4px; margin-top:10px; }
   .boxcard .mosaic img { width:44px; height:44px; object-fit:cover; border-radius:6px;
-                         background:#e8e5da; display:block; }
+                         background:var(--soft); display:block; }
 
   .unitgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
   .bkpanel { background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--mark);
@@ -40,15 +39,15 @@
   .unitcard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
               overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s;
               position:relative; }
-  .unitcard:hover { box-shadow:0 4px 14px rgba(0,0,0,.10); transform:translateY(-2px); }
+  .unitcard:hover { box-shadow:var(--sh); transform:translateY(-2px); }
   .markbadge { position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:50%;
-               background:var(--mark); color:#fff; font-size:12px; line-height:1;
+               background:var(--mark); color:var(--on-ac); font-size:12px; line-height:1;
                display:flex; align-items:center; justify-content:center;
                box-shadow:0 1px 4px rgba(0,0,0,.3); }
   .unitcard.marked .ucard-label { color:var(--mark); }
-  .bkbadge { background:var(--mark); color:#fff; font-size:12px; padding:2px 10px;
+  .bkbadge { background:var(--mark); color:var(--on-ac); font-size:12px; padding:2px 10px;
              border-radius:12px; align-self:center; }
-  .ucard-thumb { height:120px; background:#e8e5da; display:flex; align-items:center;
+  .ucard-thumb { height:120px; background:var(--soft); display:flex; align-items:center;
                  justify-content:center; color:var(--muted); font-size:11.5px; }
   .ucard-thumb img { width:100%; height:100%; object-fit:contain; display:block; }
   .ucard-label { padding:8px 10px; font-size:14px; font-weight:600; border-top:1px solid var(--line); }
@@ -99,7 +98,7 @@
   .strip .chev:hover { background:rgba(255,255,255,.25); }
 
   .controls { display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+  button { background:var(--accent); color:var(--on-ac); border:0; border-radius:8px;
            padding:10px 22px; font-size:15px; cursor:pointer; }
   button:disabled { background:var(--line); color:var(--muted); cursor:not-allowed; }
   button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }

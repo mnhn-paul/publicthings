@@ -4,40 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GBIF ↔ IPT Dataset Monitor</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌿</text></svg>">
+    <link rel="stylesheet" href="assets/theme.css">
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <style>
-        :root {
-            --bg: #f2f5f3;
-            --card: #ffffff;
-            --ink: #1c2b23;
-            --muted: #6b7c72;
-            --line: #e3e9e5;
-            --green: #2e7d4f;
-            --green-dark: #215c3a;
-            --green-soft: #e7f6ed;
-            --blue: #1f6fb2;
-            --blue-soft: #e7f1fb;
-            --purple-soft: #f0ebfa;
-            --gray-soft: #eef1ef;
-            --amber: #b8860b;
-            --amber-soft: #fff6dc;
-            --orange: #c2661a;
-            --orange-soft: #fdeedd;
-            --red: #b23a3a;
-            --red-soft: #fbe9e9;
-            --shadow: 0 1px 3px rgba(28, 43, 35, .08), 0 8px 24px rgba(28, 43, 35, .06);
-        }
         * { box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             margin: 0;
             background: var(--bg);
             color: var(--ink);
             font-size: 14px;
         }
         header {
-            background: linear-gradient(135deg, #16382a 0%, #2e7d4f 100%);
-            color: #fff;
+            background: linear-gradient(135deg, var(--hdr1) 0%, var(--hdr2) 100%);
+            color: var(--hdr-fg);
             padding: 22px 24px 18px;
         }
         header .wrap, .page {
@@ -73,7 +52,7 @@
             box-shadow: var(--shadow);
         }
         .chip b { font-weight: 650; }
-        .chip.warn { border-color: #f0c7a1; background: #fff8ef; }
+        .chip.warn { border-color: var(--warn); background: var(--warn2); }
 
         /* toolbar */
         .toolbar {
@@ -93,7 +72,7 @@
             border-radius: 8px;
             padding: 7px 10px;
             font-size: 13px;
-            background: #fbfdfc;
+            background: var(--card);
             color: var(--ink);
             outline: none;
         }
@@ -113,9 +92,9 @@
             gap: 6px;
         }
         button:disabled { opacity: .55; cursor: default; }
-        #refresh-btn { background: var(--green); color: #fff; }
+        #refresh-btn { background: var(--green); color: var(--on-ac); }
         #refresh-btn:hover:not(:disabled) { background: var(--green-dark); }
-        #download-btn { background: #fff; color: var(--green); border: 1px solid var(--green); }
+        #download-btn { background: var(--card); color: var(--green); border: 1px solid var(--green); }
         #download-btn:hover { background: var(--green-soft); }
 
         /* progress + status */
@@ -136,7 +115,7 @@
         #error {
             display: none;
             background: var(--red-soft);
-            border: 1px solid #efc3c3;
+            border: 1px solid var(--err);
             color: var(--red);
             border-radius: 10px;
             padding: 12px 16px;
@@ -144,7 +123,7 @@
             align-items: center;
             gap: 12px;
         }
-        #error button { background: var(--red); color: #fff; }
+        #error button { background: var(--red); color: var(--on-ac); }
 
         /* table */
         .card {
@@ -169,20 +148,20 @@
         th {
             position: sticky;
             top: 0;
-            background: #f7faf8;
+            background: var(--soft);
             border-bottom: 2px solid var(--line);
             cursor: pointer;
             user-select: none;
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: .4px;
-            color: #4a5d52;
+            color: var(--mut);
             z-index: 2;
         }
-        th:hover { background: #eef4f0; }
+        th:hover { background: var(--soft); }
         th .arrow { font-size: 10px; margin-left: 3px; }
         tbody tr { border-bottom: 1px solid var(--line); }
-        tbody tr:hover { background: #f6faf7; }
+        tbody tr:hover { background: var(--soft); }
         td.num { font-variant-numeric: tabular-nums; text-align: right; }
         td .title-cell { white-space: normal; min-width: 240px; max-width: 420px; font-weight: 600; }
         td a { color: var(--blue); text-decoration: none; }
@@ -203,8 +182,8 @@
             color: var(--green);
             font-weight: 650;
         }
-        td .links a.dwca:hover { background: var(--green); color: #fff; }
-        .badge.pub { background: var(--gray-soft); color: #4a5d52; }
+        td .links a.dwca:hover { background: var(--green); color: var(--on-ac); }
+        .badge.pub { background: var(--gray-soft); color: var(--mut); }
         .colhidden { display: none; }
 
         /* popups (column visibility + type filter) */
@@ -232,13 +211,13 @@
             cursor: pointer;
             white-space: nowrap;
         }
-        .popup .menu-item:hover { background: #eef4f0; }
+        .popup .menu-item:hover { background: var(--soft); }
         .popup .menu-item.active { background: var(--green-soft); font-weight: 650; }
         .popup .menu-item .count { color: var(--muted); font-size: 12px; margin-left: auto; padding-left: 14px; }
         .popup input[type="checkbox"] { accent-color: var(--green); }
         .popup .menu-sep { border-top: 1px solid var(--line); margin: 6px 4px; }
 
-        .pending { color: #b9c4bd; font-style: italic; }
+        .pending { color: var(--mut); font-style: italic; }
         .badge {
             display: inline-block;
             padding: 2px 9px;
@@ -249,21 +228,21 @@
         }
         .badge.occ { background: var(--green-soft); color: var(--green); }
         .badge.chk { background: var(--blue-soft); color: var(--blue); }
-        .badge.evt { background: var(--purple-soft); color: #6a45b0; }
-        .badge.camtrap { background: #fdeef8; color: #a3368f; }
+        .badge.evt { background: var(--purple-soft); color: var(--ac); }
+        .badge.camtrap { background: var(--purple-soft); color: var(--ac); }
         .badge.meta, .badge.other { background: var(--gray-soft); color: var(--muted); }
 
         /* country panel */
         .country-panel { padding: 16px 18px 14px; margin-bottom: 14px; }
         .country-panel h2 { margin: 0 0 4px; font-size: 16px; }
-        .country-panel h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: #4a5d52; }
+        .country-panel h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--mut); }
         .country-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
         .country-head .small-links a { color: var(--blue); text-decoration: none; font-size: 12px; }
         .country-head .small-links a:hover { text-decoration: underline; }
         .country-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .stat {
             flex: 1 1 140px;
-            background: #f7faf8;
+            background: var(--soft);
             border: 1px solid var(--line);
             border-radius: 10px;
             padding: 10px 14px;
@@ -365,7 +344,7 @@
             <span class="spacer"></span>
             <span class="meta" id="last-updated"></span>
             <button id="refresh-btn" title="Reload all data (bypasses the 6h cache)">⟳ Refresh</button>
-            <button id="download-btn" title="Export the currently displayed rows as CSV">⬇ Download CSV</button>
+            <button id="download-btn" title="Export the currently displayed rows as CSV">↓ Download CSV</button>
             <button id="columns-btn" title="Show or hide table columns">▤ Columns</button>
         </div>
 

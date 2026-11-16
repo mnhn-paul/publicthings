@@ -4,13 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MNHNL checklists on ChecklistBank</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#667085; --line:#e3e6eb; --accent:#1f6feb; --accent-ink:#fff; --warn:#b54708; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#14171c; --card:#1c2027; --ink:#e8eaee; --muted:#9aa3b2; --line:#2e343e; --accent:#4c8dff; --accent-ink:#0b1220; --warn:#f5a45d; }
-  }
   * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  body { margin:0; background:var(--bg); color:var(--ink); }
   header, main { max-width: 1250px; margin: 0 auto; padding: 16px 20px; }
   h1 { font-size: 1.35rem; margin: 8px 0 2px; }
   .sub { color: var(--muted); margin: 0 0 12px; }
@@ -48,7 +46,7 @@
   @keyframes sp { to { transform:rotate(360deg); } }
   #phList { display:grid; grid-template-columns: minmax(160px,1fr) 110px 1fr; gap:4px 12px; font-size:.88rem; align-items:center; margin-top:6px; }
   #phList progress { margin:0; height:8px; }
-  .st-run { color:var(--accent); } .st-ok { color:#1a7f37; } .st-err { color:var(--warn); } .st-wait { color:var(--muted); }
+  .st-run { color:var(--accent); } .st-ok { color:var(--accent); } .st-err { color:var(--warn); } .st-wait { color:var(--muted); }
 </style>
 </head>
 <body>

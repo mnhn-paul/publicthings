@@ -1,0 +1,178 @@
+/* ============================================================
+   publicthings — shared house theme
+   ------------------------------------------------------------
+   One central place for the look & feel of every tool page in
+   this repository. Each page only needs:
+
+       <link rel="stylesheet" href="assets/theme.css">        (root pages)
+       <link rel="stylesheet" href="../assets/theme.css">     (subfolders)
+       <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+   The file provides:
+     1. Design tokens (CSS custom properties) — colours, fonts,
+        radii, shadows — for light and dark mode. Dark mode follows
+        prefers-color-scheme automatically; pages may also force it
+        with <html data-theme="light"|"dark"> (used by the METS
+        viewer's theme toggle).
+     2. Legacy token aliases (--ink, --accent, --green, ...) so
+        existing per-page rules keep working unchanged.
+     3. A base layer (@layer publicthings.base) with element-level
+        defaults (body font, links, focus ring, ...). Because it is
+        a cascade layer, any rule in a page's own <style> block
+        still wins — pages only override what they really need.
+
+   To change the look of ALL tools at once, edit the tokens below.
+   Keep the light and dark token blocks in sync (they are repeated
+   for :root, the dark media query and the data-theme overrides).
+   ============================================================ */
+
+/* ---------- light (default) ---------- */
+:root{
+  color-scheme:light;
+  /* type & shape */
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;
+  --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --radius:10px;
+  --radius-sm:8px;
+  /* core palette */
+  --bg:#fafaf7;
+  --fg:#1d2420;
+  --mut:#6b756e;
+  --card:#ffffff;
+  --bd:#dcdfd8;
+  --ac:#2f6b4f;
+  --ac-h:#265840;
+  --ac-deep:#1d4634;
+  --ac2:#e6f0ea;
+  --on-ac:#ffffff;
+  --err:#b3261e;
+  --err2:#fbecea;
+  --warn:#8a5a10;
+  --warn2:#f8efdb;
+  --soft:#eef0ea;
+  --sh:0 1px 3px rgba(29,36,32,.08),0 8px 24px rgba(29,36,32,.06);
+  --ring:0 0 0 3px rgba(47,107,79,.25);
+  /* header gradient */
+  --hdr1:var(--ac-deep);
+  --hdr2:var(--ac);
+  --hdr-fg:#ffffff;
+  --hdr-sub:rgba(255,255,255,.78);
+  /* legacy aliases used by the individual tool pages */
+  --ink:var(--fg);
+  --muted:var(--mut);
+  --line:var(--bd);
+  --panel:var(--card);
+  --accent:var(--ac);
+  --accent2:var(--ac2);
+  --accent-ink:var(--on-ac);
+  --green:var(--ac);
+  --green-dark:var(--ac-h);
+  --green-soft:var(--ac2);
+  --blue:var(--ac);
+  --blue-soft:var(--ac2);
+  --red:var(--err);
+  --red-soft:var(--err2);
+  --amber:var(--warn);
+  --amber-soft:var(--warn2);
+  --orange:var(--warn);
+  --orange-soft:var(--warn2);
+  --purple-soft:var(--soft);
+  --gray-soft:var(--soft);
+  --mark:var(--warn);
+  --shadow:var(--sh);
+}
+
+/* ---------- dark (automatic, unless forced light) ---------- */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#161a17;
+    --fg:#e6eae6;
+    --mut:#93a097;
+    --card:#1e2420;
+    --bd:#333c36;
+    --ac:#6fc29a;
+    --ac-h:#8fd4b4;
+    --ac-deep:#0b241b;
+    --ac2:#243229;
+    --on-ac:#0c1a12;
+    --err:#f2867e;
+    --err2:#3a211e;
+    --warn:#d9a13f;
+    --warn2:#3a2c10;
+    --soft:#232a26;
+    --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
+    --ring:0 0 0 3px rgba(111,194,154,.35);
+    --hdr-fg:#f2f7f4;
+    --hdr-sub:rgba(235,243,238,.75);
+  }
+}
+
+/* ---------- forced themes via <html data-theme="..."> ---------- */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#161a17;
+  --fg:#e6eae6;
+  --mut:#93a097;
+  --card:#1e2420;
+  --bd:#333c36;
+  --ac:#6fc29a;
+  --ac-h:#8fd4b4;
+  --ac-deep:#0b241b;
+  --ac2:#243229;
+  --on-ac:#0c1a12;
+  --err:#f2867e;
+  --err2:#3a211e;
+  --warn:#d9a13f;
+  --warn2:#3a2c10;
+  --soft:#232a26;
+  --sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
+  --ring:0 0 0 3px rgba(111,194,154,.35);
+  --hdr-fg:#f2f7f4;
+  --hdr-sub:rgba(235,243,238,.75);
+}
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#fafaf7;
+  --fg:#1d2420;
+  --mut:#6b756e;
+  --card:#ffffff;
+  --bd:#dcdfd8;
+  --ac:#2f6b4f;
+  --ac-h:#265840;
+  --ac-deep:#1d4634;
+  --ac2:#e6f0ea;
+  --on-ac:#ffffff;
+  --err:#b3261e;
+  --err2:#fbecea;
+  --warn:#8a5a10;
+  --warn2:#f8efdb;
+  --soft:#eef0ea;
+  --sh:0 1px 3px rgba(29,36,32,.08),0 8px 24px rgba(29,36,32,.06);
+  --ring:0 0 0 3px rgba(47,107,79,.25);
+  --hdr-fg:#ffffff;
+  --hdr-sub:rgba(255,255,255,.78);
+}
+
+/* ---------- base element defaults (lowest priority layer) ----------
+   Rules in a page's own <style> block always override these.     */
+@layer publicthings.base{
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font:15px/1.5 var(--sans);
+    transition:background-color .25s ease,color .25s ease;
+  }
+  h1,h2,h3,h4{line-height:1.25}
+  a{color:var(--ac)}
+  a:hover{color:var(--ac-h)}
+  button{font:inherit;cursor:pointer}
+  input,select,textarea{font:inherit;color:var(--fg)}
+  code,kbd,pre,samp{font-family:var(--mono)}
+  img{max-width:100%}
+  :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+  ::selection{background:var(--ac);color:var(--on-ac)}
+}

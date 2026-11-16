@@ -5,24 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>METS Event Viewer</title>
+<link rel="stylesheet" href="../assets/theme.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <style>
-:root{color-scheme:light;
---bg:#f3f2ec;--fg:#1c2b25;--mut:#5d6c63;--card:#ffffff;--bd:#dce2da;
---ac:#1c6b4a;--ac-h:#15563b;--ac2:#e7f1eb;--on-ac:#ffffff;
---err:#b3261e;--err2:#fbecea;--warn:#8a5a10;
---hdr1:#0e3a2b;--hdr2:#1d6147;--hdr-fg:#ffffff;--hdr-sub:rgba(255,255,255,.78);
---serif:Georgia,'Iowan Old Style','Times New Roman',serif;
---sh:0 1px 2px rgba(14,58,43,.07),0 6px 18px rgba(14,58,43,.06);
---ring:0 0 0 3px rgba(28,107,74,.22)}
-html[data-theme=dark]{color-scheme:dark;
---bg:#101713;--fg:#e5ebe6;--mut:#9aab9f;--card:#1a221d;--bd:#2c3830;
---ac:#4cc08c;--ac-h:#63d39e;--ac2:#1e2f26;--on-ac:#08150e;
---err:#f38b7f;--err2:#38201b;--warn:#d9a13f;
---hdr1:#0b241b;--hdr2:#123d2c;--hdr-fg:#f2f7f4;--hdr-sub:rgba(235,243,238,.75);
---sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
---ring:0 0 0 3px rgba(76,192,140,.3)}
 *{box-sizing:border-box}
-body{margin:0;padding:26px 22px 40px;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;transition:background-color .25s ease,color .25s ease}
+body{margin:0;padding:26px 22px 40px;background:var(--bg);color:var(--fg);transition:background-color .25s ease,color .25s ease}
 main{max-width:1180px;margin:0 auto}
 ::selection{background:var(--ac);color:var(--on-ac)}
 a{color:var(--ac)}
@@ -37,7 +24,7 @@ background:radial-gradient(560px 220px at 88% -60px,rgba(255,255,255,.16),transp
 .brand{display:flex;align-items:center;gap:18px;min-width:0}
 .mark{width:54px;height:54px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
 background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28)}
-.hdr h1{font-family:var(--serif);font-size:27px;font-weight:600;margin:0 0 5px;letter-spacing:.2px}
+.hdr h1{font-size:27px;font-weight:600;margin:0 0 5px;letter-spacing:.2px}
 .hdr .sub{color:var(--hdr-sub);margin:0;max-width:64ch}
 .tbtn{width:44px;height:44px;flex:none;padding:0;border:1px solid rgba(255,255,255,.3);border-radius:50%;
 background:rgba(255,255,255,.12);color:var(--hdr-fg);display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
@@ -47,7 +34,7 @@ background:rgba(255,255,255,.12);color:var(--hdr-fg);display:flex;align-items:ce
 .tbtn[data-pref=light] .ic-light{display:block}
 .tbtn[data-pref=dark] .ic-dark{display:block}
 /* headings & text */
-h2{font-family:var(--serif);font-size:20px;font-weight:600;margin:0}
+h2{font-size:20px;font-weight:600;margin:0}
 h3{font-size:12px;margin:18px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 .sub,.m{color:var(--mut)}
 /* cards & layout */
@@ -73,7 +60,7 @@ details.opt .row{margin-top:8px}
 .err{color:var(--err)}
 .bar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin:26px 0 14px}
 .blk>summary{cursor:pointer}
-.blk>summary strong{font-family:var(--serif);font-size:18px;font-weight:600}
+.blk>summary strong{font-size:18px;font-weight:600}
 /* tables, gbif.org style */
 .tw{overflow-x:auto;border:1px solid var(--bd);border-radius:12px}
 table{border-collapse:collapse;width:100%;min-width:700px}
@@ -91,7 +78,6 @@ tr.sp td{white-space:normal;background:var(--bg)}
 tr.sp summary{cursor:pointer;color:var(--mut);font-size:13px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
 .chip{border:1px solid var(--bd);background:var(--bg);border-radius:999px;padding:3px 11px;font-size:13px}
-.chip i{font-family:var(--serif)}
 .chip b{color:var(--ac)}
 .chip small{color:var(--mut)}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
