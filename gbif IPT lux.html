@@ -47,7 +47,7 @@
         .chip {
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 999px;
+            border-radius: var(--radius-sm);
             padding: 6px 14px;
             font-size: 13px;
             box-shadow: var(--shadow);
@@ -63,14 +63,14 @@
             align-items: center;
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 10px;
+            border-radius: var(--radius);
             padding: 10px 12px;
             box-shadow: var(--shadow);
             margin-bottom: 14px;
         }
         .toolbar input[type="search"], .toolbar select {
             border: 1px solid var(--line);
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             padding: 7px 10px;
             font-size: 13px;
             background: var(--card);
@@ -83,7 +83,7 @@
         .toolbar .meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
         button {
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
             padding: 8px 14px;
             font-size: 13px;
             font-weight: 600;
@@ -102,7 +102,7 @@
         #progress {
             height: 3px;
             background: transparent;
-            border-radius: 2px;
+            border-radius: var(--radius-sm);
             overflow: hidden;
             margin-bottom: 10px;
         }
@@ -118,7 +118,7 @@
             background: var(--red-soft);
             border: 1px solid var(--err);
             color: var(--red);
-            border-radius: 10px;
+            border-radius: var(--radius);
             padding: 12px 16px;
             margin-bottom: 14px;
             align-items: center;
@@ -130,7 +130,7 @@
         .card {
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 12px;
+            border-radius: var(--radius);
             box-shadow: var(--shadow);
             overflow: hidden;
         }
@@ -172,7 +172,7 @@
             margin-right: 6px;
             padding: 2px 8px;
             border: 1px solid var(--line);
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 12px;
         }
         td .links a:hover { background: var(--gray-soft); text-decoration: none; }
@@ -192,7 +192,7 @@
             position: absolute;
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 10px;
+            border-radius: var(--radius);
             box-shadow: var(--sh);
             padding: 8px;
             z-index: 50;
@@ -208,7 +208,7 @@
             align-items: center;
             gap: 8px;
             padding: 6px 10px;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             white-space: nowrap;
         }
@@ -222,7 +222,7 @@
         .badge {
             display: inline-block;
             padding: 2px 9px;
-            border-radius: 999px;
+            border-radius: var(--radius-sm);
             font-size: 11px;
             font-weight: 600;
             letter-spacing: .3px;
@@ -245,7 +245,7 @@
             flex: 1 1 140px;
             background: var(--soft);
             border: 1px solid var(--line);
-            border-radius: 10px;
+            border-radius: var(--radius);
             padding: 10px 14px;
         }
         .stat .n { display: block; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -257,7 +257,7 @@
         .pill {
             display: inline-block;
             padding: 2px 10px;
-            border-radius: 999px;
+            border-radius: var(--radius-sm);
             font-size: 12px;
             font-weight: 600;
         }

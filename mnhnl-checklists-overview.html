@@ -13,14 +13,14 @@
   header, main { max-width: 1250px; margin: 0 auto; padding: 16px 20px; }
   h1 { font-size: 1.35rem; margin: 8px 0 2px; }
   .sub { color: var(--muted); margin: 0 0 12px; }
-  .bar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; position:sticky; top:64px; z-index:5; }
+  .bar { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; position:sticky; top:64px; z-index:5; }
   .bar .grow { flex:1 1 220px; }
-  input[type=search] { width:100%; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); }
-  button { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 12px; border-radius:8px; font:inherit; }
+  input[type=search] { width:100%; padding:7px 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); color:var(--ink); }
+  button { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 12px; border-radius:var(--radius-sm); font:inherit; }
   button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
   button:disabled { opacity:.5; cursor:not-allowed; }
   label.chk { display:inline-flex; gap:6px; align-items:center; color:var(--muted); font-size:.9rem; }
-  .tablewrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; margin-top:12px; }
+  .tablewrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); margin-top:12px; }
   table { border-collapse:collapse; width:100%; min-width:980px; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
@@ -30,16 +30,16 @@
   td.title { min-width:260px; }
   td.title .t { font-weight:600; }
   td.title .d { color:var(--muted); font-size:.85rem; margin-top:2px; max-height:3.9em; overflow:hidden; }
-  .tag { display:inline-block; font-size:.75rem; padding:1px 7px; border:1px solid var(--line); border-radius:99px; color:var(--muted); margin:0 4px 2px 0; white-space:nowrap; }
+  .tag { display:inline-block; font-size:.75rem; padding:1px 7px; border:1px solid var(--line); border-radius:var(--radius-sm); color:var(--muted); margin:0 4px 2px 0; white-space:nowrap; }
   a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
   .links a { display:block; white-space:nowrap; }
   .num { text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap; }
   .status { margin:12px 0; color:var(--muted); }
   .error { color:var(--warn); }
-  #log { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-top:12px; font-size:.88rem; max-height:220px; overflow:auto; white-space:pre-wrap; display:none; }
+  #log { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin-top:12px; font-size:.88rem; max-height:220px; overflow:auto; white-space:pre-wrap; display:none; }
   progress { width:220px; height:10px; vertical-align:middle; }
   .nowrap { white-space:nowrap; }
-  #panel { display:none; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-top:12px; }
+  #panel { display:none; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; margin-top:12px; }
   #panel .ph { display:flex; align-items:center; gap:10px; font-weight:600; }
   #panel progress { width:100%; height:12px; margin:8px 0; }
   .spin { width:16px; height:16px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; flex:none; }
