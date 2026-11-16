@@ -31,16 +31,16 @@
   /* The repo's folders are the main menu points; the tools inside each
      folder are the submenu entries of that folder's menu point. */
   var GROUPS = [
-    { folder: 'GBIF - COL', tools: [
-      { path: 'GBIF - COL/gbif IPT lux.html', label: 'GBIF ↔ IPT', desc: 'Datasets hosted on the MNHNL IPT — GBIF registry vs. IPT publication status.' },
-      { path: 'GBIF - COL/mnhnl-checklists-overview.html', label: 'Checklists', desc: 'Checklist datasets published by MNHNL on ChecklistBank — select and download merged taxa tables.' }
+    { folder: 'gbif-col', tools: [
+      { path: 'gbif-col/gbif IPT lux.html', label: 'GBIF ↔ IPT', desc: 'Datasets hosted on the MNHNL IPT — GBIF registry vs. IPT publication status.' },
+      { path: 'gbif-col/mnhnl-checklists-overview.html', label: 'Checklists', desc: 'Checklist datasets published by MNHNL on ChecklistBank — select and download merged taxa tables.' }
     ]},
     { folder: 'data.public', tools: [
       { path: 'data.public/MNHNL_dataPublic_dashboard.html', label: 'Dashboard', desc: 'Insights into the datasets MNHNL publishes on the Luxembourg open data portal.' }
     ]},
-    { folder: 'Goobi', tools: [
-      { path: 'Goobi/Cungs-goobi-mets-viewer.html', label: 'METS viewer', desc: 'Extracts event notes from METS/MODS files and exports table, DwC Event Core or Excel.' },
-      { path: 'Goobi/Digiento-viewer.html', label: 'Specimen browser', desc: 'Browse boxes and specimens from face.mnhn.gov.lu.' }
+    { folder: 'goobi', tools: [
+      { path: 'goobi/cungs-goobi-mets-viewer.html', label: 'METS viewer', desc: 'Extracts event notes from METS/MODS files and exports table, DwC Event Core or Excel.' },
+      { path: 'goobi/digiento-viewer.html', label: 'Specimen browser', desc: 'Browse boxes and specimens from face.mnhn.gov.lu.' }
     ]}
   ];
   var PAGES = [{ path: 'index.html', label: 'Overview', desc: 'Tools and pages published in this repository via GitHub Pages.' }]
@@ -49,11 +49,11 @@
   /* page title/description blocks that get folded into the top bar */
   var FOLD = {
     'index.html': ['main>h1', 'main>p.sub'],
-    'GBIF - COL/gbif IPT lux.html': ['body>header'],
-    'GBIF - COL/mnhnl-checklists-overview.html': ['body>header'],
+    'gbif-col/gbif IPT lux.html': ['body>header'],
+    'gbif-col/mnhnl-checklists-overview.html': ['body>header'],
     'data.public/MNHNL_dataPublic_dashboard.html': ['body>h1', 'body>.subtitle'],
-    'Goobi/Cungs-goobi-mets-viewer.html': ['main>header.hdr'],
-    'Goobi/Digiento-viewer.html': ['body>header h1']
+    'goobi/cungs-goobi-mets-viewer.html': ['main>header.hdr'],
+    'goobi/digiento-viewer.html': ['body>header h1']
   };
 
   var CARET = '<svg class="pt-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
