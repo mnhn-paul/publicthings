@@ -3,63 +3,152 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>METS Event Viewer</title>
 <style>
-:root{--bg:#fafaf7;--fg:#1d2420;--mut:#6b756e;--card:#fff;--bd:#dcdfd8;--ac:#2f6b4f;--ac2:#e6f0ea;--err:#b3261e}
-@media (prefers-color-scheme:dark){:root{--bg:#161a17;--fg:#e6eae6;--mut:#93a097;--card:#1e2420;--bd:#333c36;--ac:#6fc29a;--ac2:#243229;--err:#f2867e}}
+:root{color-scheme:light;
+--bg:#f3f2ec;--fg:#1c2b25;--mut:#5d6c63;--card:#ffffff;--bd:#dce2da;
+--ac:#1c6b4a;--ac-h:#15563b;--ac2:#e7f1eb;--on-ac:#ffffff;
+--err:#b3261e;--err2:#fbecea;--warn:#8a5a10;
+--hdr1:#0e3a2b;--hdr2:#1d6147;--hdr-fg:#ffffff;--hdr-sub:rgba(255,255,255,.78);
+--serif:Georgia,'Iowan Old Style','Times New Roman',serif;
+--sh:0 1px 2px rgba(14,58,43,.07),0 6px 18px rgba(14,58,43,.06);
+--ring:0 0 0 3px rgba(28,107,74,.22)}
+html[data-theme=dark]{color-scheme:dark;
+--bg:#101713;--fg:#e5ebe6;--mut:#9aab9f;--card:#1a221d;--bd:#2c3830;
+--ac:#4cc08c;--ac-h:#63d39e;--ac2:#1e2f26;--on-ac:#08150e;
+--err:#f38b7f;--err2:#38201b;--warn:#d9a13f;
+--hdr1:#0b241b;--hdr2:#123d2c;--hdr-fg:#f2f7f4;--hdr-sub:rgba(235,243,238,.75);
+--sh:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
+--ring:0 0 0 3px rgba(76,192,140,.3)}
 *{box-sizing:border-box}
-body{margin:0;padding:24px;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
-main{max-width:1150px;margin:0 auto}
-h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:0}h3{font-size:14px;margin:16px 0 8px;color:var(--mut)}
-.sub,.m{color:var(--mut)}.sub{margin:0 0 18px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-textarea,input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
-textarea{min-height:84px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
-button,label.btn{padding:8px 13px;border:1px solid var(--ac);border-radius:8px;background:var(--ac);color:var(--bg);font:inherit;cursor:pointer}
-button.sec,label.sec{background:transparent;color:var(--ac)}
-button.x{border-color:var(--err);color:var(--err);background:transparent}
-details.opt{margin-top:10px;color:var(--mut)}details.opt summary{cursor:pointer}details.opt .row{margin-top:8px}
+body{margin:0;padding:26px 22px 40px;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;transition:background-color .25s ease,color .25s ease}
+main{max-width:1180px;margin:0 auto}
+::selection{background:var(--ac);color:var(--on-ac)}
 a{color:var(--ac)}
-#msg{margin-top:10px}.err{color:var(--err)}
-.bar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin:22px 0 12px}
-.blk>summary{cursor:pointer;font-size:16px}
-.tw{overflow-x:auto;border:1px solid var(--bd);border-radius:10px}
+a:hover{color:var(--ac-h)}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;font-size:.92em;background:var(--ac2);padding:1px 5px;border-radius:5px}
+/* hero header, inspired by mnhn.public.lu */
+.hdr{position:relative;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;
+margin-bottom:24px;padding:30px 32px;border-radius:18px;color:var(--hdr-fg);
+background:linear-gradient(130deg,var(--hdr1),var(--hdr2));box-shadow:var(--sh);overflow:hidden}
+.hdr::after{content:"";position:absolute;inset:0;pointer-events:none;
+background:radial-gradient(560px 220px at 88% -60px,rgba(255,255,255,.16),transparent 70%)}
+.brand{display:flex;align-items:center;gap:18px;min-width:0}
+.mark{width:54px;height:54px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
+background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28)}
+.hdr h1{font-family:var(--serif);font-size:27px;font-weight:600;margin:0 0 5px;letter-spacing:.2px}
+.hdr .sub{color:var(--hdr-sub);margin:0;max-width:64ch}
+.tbtn{width:44px;height:44px;flex:none;padding:0;border:1px solid rgba(255,255,255,.3);border-radius:50%;
+background:rgba(255,255,255,.12);color:var(--hdr-fg);display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+.tbtn:hover{background:rgba(255,255,255,.24);color:var(--hdr-fg)}
+.tbtn svg{display:none}
+.tbtn[data-pref=auto] .ic-auto{display:block}
+.tbtn[data-pref=light] .ic-light{display:block}
+.tbtn[data-pref=dark] .ic-dark{display:block}
+/* headings & text */
+h2{font-family:var(--serif);font-size:20px;font-weight:600;margin:0}
+h3{font-size:12px;margin:18px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.sub,.m{color:var(--mut)}
+/* cards & layout */
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* forms */
+textarea,input[type=text]{width:100%;padding:9px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:88px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px}
+textarea:focus,input[type=text]:focus{outline:none;border-color:var(--ac);box-shadow:var(--ring)}
+/* buttons */
+button,label.btn{padding:9px 16px;border:1px solid transparent;border-radius:7px;background:var(--ac);color:var(--on-ac);font:inherit;font-weight:600;font-size:14px;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+button:hover,label.btn:hover{background:var(--ac-h)}
+button:active{transform:translateY(1px)}
+button.sec,label.sec{background:transparent;color:var(--ac);border-color:var(--bd)}
+button.sec:hover,label.sec:hover{background:var(--ac2);border-color:var(--ac)}
+button.x{border-color:var(--err);color:var(--err);background:transparent}
+button.x:hover{background:var(--err2)}
+button:focus-visible,label.btn:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+details.opt{margin-top:12px;color:var(--mut)}
+details.opt summary{cursor:pointer}
+details.opt .row{margin-top:8px}
+#msg{margin-top:12px}
+.err{color:var(--err)}
+.bar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin:26px 0 14px}
+.blk>summary{cursor:pointer}
+.blk>summary strong{font-family:var(--serif);font-size:18px;font-weight:600}
+/* tables, gbif.org style */
+.tw{overflow-x:auto;border:1px solid var(--bd);border-radius:12px}
 table{border-collapse:collapse;width:100%;min-width:700px}
-th,td{padding:8px 11px;text-align:left;border-bottom:1px solid var(--bd);vertical-align:top;white-space:nowrap}
-th{background:var(--ac2);font-size:13px}tr:last-child td{border-bottom:0}
-.pg a{display:inline-block;margin:0 4px 2px 0;padding:0 7px;border:1px solid var(--bd);border-radius:12px;text-decoration:none;font-size:13px}
-dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}dt{color:var(--mut)}dd{margin:0;overflow-wrap:anywhere}
-.acts{margin-top:14px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--bd);vertical-align:top;white-space:nowrap}
+thead th{background:var(--ac2);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+tbody tr:not(.sp):hover td{background:var(--ac2)}
+tr:last-child td{border-bottom:0}
+.pg a{display:inline-block;margin:0 4px 3px 0;padding:1px 9px;border-radius:999px;background:var(--ac2);color:var(--ac);text-decoration:none;font-size:12.5px;font-weight:600}
+.pg a:hover{background:var(--ac);color:var(--on-ac)}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}
+dt{color:var(--mut)}
+dd{margin:0;overflow-wrap:anywhere}
+.acts{margin-top:16px}
 tr.sp td{white-space:normal;background:var(--bg)}
 tr.sp summary{cursor:pointer;color:var(--mut);font-size:13px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
-.chip{border:1px solid var(--bd);background:var(--card);border-radius:14px;padding:2px 10px;font-size:13px}
-.chip b{color:var(--ac)}.chip small{color:var(--mut)}
-.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:10px}
+.chip{border:1px solid var(--bd);background:var(--bg);border-radius:999px;padding:3px 11px;font-size:13px}
+.chip i{font-family:var(--serif)}
+.chip b{color:var(--ac)}
+.chip small{color:var(--mut)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
 .pgrid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
 #pane-loc input,#pane-tax input{min-width:100px}
 #locmsg,#taxmsg{white-space:pre-line}
-.warn{color:#a5650e}
-@media (prefers-color-scheme:dark){.warn{color:#d9a13f}}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-.tab{background:transparent;color:var(--mut);border-color:var(--bd)}
-.tab.active{background:var(--ac);color:var(--bg)}
-.pane{border-top:1px solid var(--bd);padding-top:12px}
-details.docinfo{margin:16px 0 8px}details.docinfo summary{cursor:pointer;font-size:14px;color:var(--mut)}
+.warn{color:var(--warn)}
+/* tabs */
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--bd)}
+.tab{background:transparent;color:var(--mut);border:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;position:relative;top:1px}
+.tab:hover{background:transparent;color:var(--fg);border-bottom-color:var(--bd)}
+.tab.active{background:transparent;color:var(--ac);border-bottom-color:var(--ac)}
+.tab.active .m{color:var(--ac);opacity:.75}
+.pane{border-top:1px solid var(--bd);padding-top:14px}
+details.docinfo{margin:16px 0 8px}
+details.docinfo summary{cursor:pointer;font-size:14px;color:var(--mut)}
+/* statistics */
 .stat{display:grid;grid-template-columns:1fr max-content 110px;gap:12px;align-items:center;margin:7px 0;font-size:14px}
 .stat .num{text-align:right;white-space:nowrap;color:var(--mut)}
-.pbar{height:9px;background:var(--bg);border:1px solid var(--bd);border-radius:5px;overflow:hidden}
-.pbar i{display:block;height:100%;background:var(--ac)}
-.statgroup{margin:16px 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-.types{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px;font-size:13px}
-.types span{border:1px solid var(--bd);border-radius:12px;padding:1px 9px;color:var(--mut)}
+.pbar{height:8px;background:var(--bg);border:1px solid var(--bd);border-radius:999px;overflow:hidden}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--ac-h),var(--ac))}
+.statgroup{margin:18px 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.types{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px;font-size:13px}
+.types span{border:1px solid var(--bd);background:var(--card);border-radius:999px;padding:2px 10px;color:var(--mut)}
+/* footer */
+.footer{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:30px;padding-top:14px;border-top:1px solid var(--bd);color:var(--mut);font-size:13px}
+@media (max-width:640px){
+body{padding:14px 12px 24px}
+.hdr{padding:20px 22px}
+.stat{grid-template-columns:1fr max-content}
+.stat .num{text-align:left}
+}
 </style>
+<script>
+(function(){var p='auto';try{var v=localStorage.getItem('mets-theme');if(v==='light'||v==='dark')p=v}catch(e){}
+if(p==='auto')p=window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+document.documentElement.dataset.theme=p;})();
+</script>
 </head>
 <body>
 <main>
-<h1>METS Event Viewer</h1>
-<p class="sub">Extracts event notes from one or more METS/MODS files, shows the pages they are on, and exports table, Darwin Core Event Core or Excel.</p>
+<header class="hdr">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-5 0-8-3.5-8-8 0-6 4-9 14-10 1 11-2 18-6 18z"/><path d="M12 21c2-5 4-8 8-11"/></svg>
+    </span>
+    <div>
+      <h1>METS Event Viewer</h1>
+      <p class="sub">Extracts event notes from one or more METS/MODS files, shows the pages they are on, and exports table, Darwin Core Event Core or Excel.</p>
+    </div>
+  </div>
+  <button id="theme" class="tbtn" type="button" data-pref="auto" title="Colour theme: auto" aria-label="Colour theme: auto — click to switch">
+    <svg class="ic-auto" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+    <svg class="ic-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <svg class="ic-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
 
 <div class="card">
   <textarea id="urls" aria-label="METS record IDs or URLs" placeholder="One record ID (e.g. MNHNL2024-6-01) or full METS URL per line">MNHNL2024-6-01</textarea>
@@ -131,10 +220,15 @@ details.docinfo{margin:16px 0 8px}details.docinfo summary{cursor:pointer;font-si
     <div class="row acts">
       <button class="sec" data-act="table" data-i="all">Table CSV</button>
       <button data-act="dwca" data-i="all">Darwin Core Archive (zip)</button>
-      <button data-act="xlsx" data-i="all">Excel</button>
+      <button class="sec" data-act="xlsx" data-i="all">Excel</button>
     </div>
   </div>
 </div>
+
+<footer class="footer">
+  <span>Event extraction for the Josy Cungs field notebooks · Musée national d'histoire naturelle Luxembourg</span>
+  <span><a href="https://mnhn.public.lu/fr.html" target="_blank" rel="noopener">MNHN Luxembourg</a> · <a href="https://www.gbif.org/" target="_blank" rel="noopener">GBIF</a> · Source scans: <a href="https://face.mnhn.gov.lu/viewer/" target="_blank" rel="noopener">face.mnhn.gov.lu</a></span>
+</footer>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -610,6 +704,28 @@ $('#out').addEventListener('click',e=>{
 const qp=new URLSearchParams(location.search).getAll('url');
 if(qp.length){$('#urls').value=qp.join('\n');loadAll()}
 render();
+
+/* ---------- colour theme (auto / light / dark) ---------- */
+const THEME_KEY='mets-theme';
+const tq=matchMedia('(prefers-color-scheme:dark)');
+const themePref=()=>{try{const p=localStorage.getItem(THEME_KEY);return p==='light'||p==='dark'?p:'auto'}catch(e){return 'auto'}};
+function applyTheme(){
+  const p=themePref(),dark=p==='auto'?tq.matches:p==='dark';
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const b=$('#theme');
+  if(b){b.dataset.pref=p;
+    const t=p==='auto'?('auto ('+(tq.matches?'dark':'light')+')'):p;
+    b.title='Colour theme: '+t;b.setAttribute('aria-label','Colour theme: '+t+' — click to switch');}
+}
+$('#theme').onclick=()=>{
+  const order=['auto','light','dark'];
+  const p=order[(order.indexOf(themePref())+1)%3];
+  try{localStorage.setItem(THEME_KEY,p)}catch(e){}
+  applyTheme();
+};
+if(tq.addEventListener)tq.addEventListener('change',()=>{if(themePref()==='auto')applyTheme()});
+else tq.addListener(()=>{if(themePref()==='auto')applyTheme()});
+applyTheme();
 </script>
 </body>
 </html>
