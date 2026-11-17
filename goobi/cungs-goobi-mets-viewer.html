@@ -394,7 +394,7 @@ function timelineHtml(events){
     const d=new Date(ts);
     if(mode==='y')return String(d.getUTCFullYear());
     if(mode==='m')return String(d.getUTCMonth()+1).padStart(2,'0')+'.'+d.getUTCFullYear();
-    return String(d.getUTCDate()).padStart(2,'0')+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+(d.getUTCMonth()===0&&d.getUTCDate()<=step?' '+d.getUTCFullYear()':'');
+    return String(d.getUTCDate()).padStart(2,'0')+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+(d.getUTCMonth()===0&&d.getUTCDate()<=step?' '+d.getUTCFullYear():'')
   };
   const G=180,R=14,HIST=42,TL=20,LANE=24,TOP=8;
   const W=Math.round(Math.min(2600,Math.max(760,spanDays*9)));
