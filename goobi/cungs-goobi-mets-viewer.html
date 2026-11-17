@@ -103,6 +103,22 @@ details.docinfo summary{cursor:pointer;font-size:14px;color:var(--mut)}
 .statgroup{margin:18px 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
 .types{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px;font-size:13px}
 .types span{border:1px solid var(--bd);background:var(--card);border-radius:var(--radius-sm);padding:2px 10px;color:var(--mut)}
+/* timeline of site visits */
+.tl-scroll{overflow:auto;max-height:460px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--card);margin-top:8px}
+.tl{display:block}
+.tl-lane{font-size:11.5px;font-weight:600;fill:var(--fg)}
+.tl-lanebg{fill:var(--ac2);opacity:.45}
+.tl-grid{stroke:var(--bd);stroke-width:1}
+.tl-tick{stroke:var(--bd);stroke-width:1;stroke-dasharray:2 3;opacity:.7}
+.tl-ticklabel{font-size:10.5px;fill:var(--mut)}
+.tl-hist{fill:var(--ac);opacity:.35}
+.tl-dot{fill:hsl(var(--h,140) 58% 46%);stroke:var(--card);stroke-width:1.5}
+.tl-ev{cursor:pointer}
+.tl-ev:hover .tl-dot{stroke:var(--fg)}
+.tl-leg{display:inline-block;width:10px;height:10px;border-radius:50%;background:hsl(var(--h,140) 58% 46%);margin-right:5px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tl-dot{fill:hsl(var(--h,140) 72% 66%)} :root:not([data-theme="light"]) .tl-leg{background:hsl(var(--h,140) 72% 66%)}}
+html[data-theme="dark"] .tl-dot{fill:hsl(var(--h,140) 72% 66%)}
+html[data-theme="dark"] .tl-leg{background:hsl(var(--h,140) 72% 66%)}
 /* footer */
 .footer{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:30px;padding-top:14px;border-top:1px solid var(--bd);color:var(--mut);font-size:13px}
 @media (max-width:640px){
@@ -160,6 +176,7 @@ document.documentElement.dataset.theme=p;})();
     <button class="tab" data-tab="loc">Localities <span class="m" id="loctotal"></span></button>
     <button class="tab" data-tab="tax">Taxon names <span class="m" id="taxtotal"></span></button>
     <button class="tab" data-tab="stat">Statistics</button>
+    <button class="tab" data-tab="tl">Timeline <span class="m" id="tltotal"></span></button>
   </div>
   <div class="pane" id="pane-opts">
     <p class="m" style="margin:4px 0 0">Names and person IDs below are used for <code>recordedBy</code> / <code>recordedByID</code> and <code>identifiedBy</code> / <code>identifiedByID</code> on the occurrences; the ID fields contain the person ID only. For every event, <code>sampleSizeValue</code> / <code>sampleSizeUnit</code> are calculated from the event time interval, in minutes, and <code>continent</code> / <code>country</code> are filled in for Luxembourg. Only the actual observation events (with date and time) are exported; each event ID combines the general location and visit date (e.g. <code>Haardt-2007-05-24</code>) with the METS section identifier. Communes assigned in the Localities tab are exported as <code>municipality</code>, and the mapping in the Taxon names tab adds standardized names, higher taxonomy and taxon IDs to the occurrences.</p>
@@ -191,6 +208,10 @@ document.documentElement.dataset.theme=p;})();
   <div class="pane" id="pane-stat" hidden>
     <p class="m" style="margin:4px 0 0;font-size:13px">Overview of the loaded documents: how many structure elements of each type they contain, how many pages are still unassigned, and how far the curation of events, localities and taxon names has progressed. The numbers update automatically whenever records are loaded or a mapping is imported.</p>
     <div id="stats"></div>
+  </div>
+  <div class="pane" id="pane-tl" hidden>
+    <p class="m" style="margin:4px 0 0;font-size:13px">Every observation event with a date is plotted as a dot on a time axis — one lane per site (locality), dots coloured by record; the bars on top show how many visits fall into each period. Click a dot to open the event's first page in the image viewer.</p>
+    <div id="tl"></div>
   </div>
 </div>
 
@@ -343,6 +364,80 @@ const collectTaxa=()=>{
   good(blocks).forEach(b=>b.rows.forEach(r=>r.occ.forEach(o=>{const n=(o.DwCscientificName||'').trim();if(n)m.set(n,(m.get(n)||0)+1)})));
   return [...m].sort((a,b)=>a[0].toLowerCase()<b[0].toLowerCase()?-1:a[0].toLowerCase()>b[0].toLowerCase()?1:0);
 };
+/* ---------- timeline of site visits (SVG: one lane per site, dots coloured by record) ---------- */
+const parseDate=s=>{s=String(s||'').trim();let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return Date.UTC(+m[1],+m[2]-1,+m[3]);m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);if(m)return Date.UTC(+m[3],+m[2]-1,+m[1]);return null};
+const fmtDate=ts=>{const d=new Date(ts);return String(d.getUTCDate()).padStart(2,'0')+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+'.'+d.getUTCFullYear()};
+const hueOf=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%360;return h};
+function timelineHtml(events){
+  const dated=events.filter(e=>e.ts!=null).sort((a,b)=>a.ts-b.ts);
+  const skipped=events.length-dated.length;
+  if(!dated.length)return`<p class="m" style="margin:8px 0 0">No dated site visits${skipped?` (${skipped} event(s) without a parseable date)`:''}.</p>`;
+  const min=dated[0].ts,max=dated[dated.length-1].ts;
+  const pad=Math.max((max-min)*.06,86400000*7),t0=min-pad,t1=max+pad,spanDays=(t1-t0)/86400000;
+  const steps=[[1,'d'],[7,'d'],[30.44,'m'],[91.3,'m'],[182.6,'m'],[365.25,'y'],[1826,'y'],[3652.5,'y']];
+  let step=steps[steps.length-1][0],mode='y';
+  for(const [s,m] of steps){if(spanDays/s<=36){step=s;mode=m;break}}
+  const ticks=[];
+  if(mode==='d'){
+    const d0=new Date(t0);
+    let cur=Date.UTC(d0.getUTCFullYear(),d0.getUTCMonth(),d0.getUTCDate());
+    while(cur<=t1){ticks.push(cur);cur+=step*86400000}
+  }else{
+    const stepMonths=mode==='m'?Math.max(1,Math.round(step/30.44)):12*Math.max(1,Math.round(step/365.25));
+    const d0=new Date(t0);
+    let y=d0.getUTCFullYear(),mo=d0.getUTCMonth();
+    if(stepMonths%12===0){const sy=stepMonths/12;y=Math.floor(y/sy)*sy;mo=0}
+    let cur=Date.UTC(y,mo,1);
+    while(cur<=t1){ticks.push(cur);mo+=stepMonths;while(mo>11){mo-=12;y++}cur=Date.UTC(y,mo,1)}
+  }
+  const tickLabel=ts=>{
+    const d=new Date(ts);
+    if(mode==='y')return String(d.getUTCFullYear());
+    if(mode==='m')return String(d.getUTCMonth()+1).padStart(2,'0')+'.'+d.getUTCFullYear();
+    return String(d.getUTCDate()).padStart(2,'0')+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+(d.getUTCMonth()===0&&d.getUTCDate()<=step?' '+d.getUTCFullYear()':'');
+  };
+  const G=180,R=14,HIST=42,TL=20,LANE=24,TOP=8;
+  const W=Math.round(Math.min(2600,Math.max(760,spanDays*9)));
+  const plotW=W-G-R,x=ts=>G+(ts-t0)/(t1-t0)*plotW;
+  const lanes=new Map();
+  dated.forEach(e=>{const a=lanes.get(e.site)||[];a.push(e);lanes.set(e.site,a)});
+  const laneList=[...lanes.keys()].sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+  const laneIdx=new Map(laneList.map((s,i)=>[s,i]));
+  laneList.forEach(site=>{ /* spread dots sharing the same day within a lane */
+    const byTs=new Map();
+    lanes.get(site).forEach(e=>{const a=byTs.get(e.ts)||[];a.push(e);byTs.set(e.ts,a)});
+    byTs.forEach(a=>a.forEach((e,i)=>{e.dx=(i-(a.length-1)/2)*9}));
+  });
+  const laneY=i=>TOP+HIST+TL+i*LANE+LANE/2;
+  const H=Math.round(TOP+HIST+TL+laneList.length*LANE+8);
+  const buckets=new Array(ticks.length).fill(0);
+  dated.forEach(e=>{let bi=0;for(let i=0;i<ticks.length;i++)if(e.ts>=ticks[i])bi=i;buckets[bi]++});
+  const bMax=Math.max(1,...buckets);
+  let s=`<svg class="tl" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Timeline of site visits">`;
+  laneList.forEach((site,i)=>{
+    const y=laneY(i);
+    if(i%2)s+=`<rect x="0" y="${y-LANE/2}" width="${W}" height="${LANE}" class="tl-lanebg"/>`;
+    s+=`<text x="8" y="${y+4}" class="tl-lane">${esc(site)} (${lanes.get(site).length})</text>`;
+    s+=`<line x1="${G}" y1="${y-LANE/2}" x2="${W-R}" y2="${y-LANE/2}" class="tl-grid"/>`;
+  });
+  ticks.forEach((tk,i)=>{
+    const bx=x(tk),bw=(i+1<ticks.length?x(ticks[i+1]):x(t1))-bx,c=buckets[i];
+    if(c)s+=`<rect x="${bx}" y="${TOP+HIST-c/bMax*HIST}" width="${Math.max(1,bw-1)}" height="${Math.max(1,c/bMax*HIST)}" class="tl-hist"><title>${esc(tickLabel(tk))}: ${c} visit${c>1?'s':''}</title></rect>`;
+    s+=`<line x1="${bx}" y1="${TOP}" x2="${bx}" y2="${TOP+HIST+TL+laneList.length*LANE}" class="tl-tick"/>`;
+    s+=`<text x="${bx+3}" y="${TOP+HIST+TL-6}" class="tl-ticklabel">${esc(tickLabel(tk))}</text>`;
+  });
+  dated.forEach(e=>{
+    const y=laneY(laneIdx.get(e.site));
+    s+=`<g class="tl-ev"${e.href?` data-href="${esc(e.href)}"`:''}><circle cx="${x(e.ts)+(e.dx||0)}" cy="${y}" r="5.5" class="tl-dot" style="--h:${hueOf(e.record)}"><title>${esc(e.title)}</title></circle></g>`;
+  });
+  s+='</svg>';
+  const recs=new Map();
+  dated.forEach(e=>recs.set(e.record,(recs.get(e.record)||0)+1));
+  const legend=[...recs.entries()].sort((a,b)=>b[1]-a[1]).map(([r,n])=>`<span class="chip"><i class="tl-leg" style="--h:${hueOf(r)}"></i>${esc(r)} <small>×${n}</small></span>`).join('');
+  return`<p class="m" style="margin:8px 0 6px;font-size:13px">${dated.length} dated site visit${dated.length===1?'':'s'} between ${fmtDate(min)} and ${fmtDate(max)}${skipped?`, ${skipped} event(s) without a parseable date`:''}. Click a dot to open the event's first page in the image viewer.</p>
+  ${recs.size>1?`<div class="chips" style="margin:0 0 8px">${legend}</div>`:''}
+  <div class="tl-scroll">${s}</div>`;
+}
 function statsHtml(){
   const bs=good(blocks),failed=blocks.length-bs.length;
   const pct=(a,b)=>b?Math.round(100*a/b):0;
@@ -411,6 +506,17 @@ function render(){
     return '<tr><td>'+esc(nm)+'</td><td class="m">'+n+'</td>'+fld('std')+fld('kingdom')+fld('phylum')+fld('class')+fld('order')+fld('family')+fld('id')+'</tr>';
   }).join(''):'<tr><td colspan="9" class="m">No taxa in the loaded records.</td></tr>';
   $('#stats').innerHTML=statsHtml();
+  const tlEvents=[];
+  good(blocks).forEach(b=>b.rows.forEach(r=>tlEvents.push({
+    ts:parseDate(r.f.DwCeventDate),
+    site:(r.f.DwClocality||'').trim()||'(no site)',
+    record:b.docId||b.meta.title||b.src,
+    href:r.pages.length?imgViewerPage(b.docId,r.pages[0].order):'',
+    title:`${(r.f.DwCeventDate||'').trim()}${r.f.DwCeventTime?' · '+r.f.DwCeventTime:''} · ${(r.f.DwClocality||'').trim()||'(no site)'} · ${b.docId} · ${r.occ.length} taxa · ${r.sec}${r.pages.length?' — open page '+r.pages[0].order:''}`
+  })));
+  $('#tl').innerHTML=timelineHtml(tlEvents);
+  const nD=tlEvents.filter(e=>e.ts!=null).length;
+  $('#tltotal').textContent=nD?('('+nD+' dated)'):'';
 }
 
 /* ---------- exports ---------- */
@@ -572,6 +678,7 @@ $('#allcungs').onclick=()=>{$('#urls').value=cungsIds.join('\n');loadAll()};
 $('#curate').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('#curate .tab').forEach(b=>b.classList.toggle('active',b===t));
   document.querySelectorAll('#curate .pane').forEach(p=>p.hidden=p.id!=='pane-'+t.dataset.tab)});
+$('#pane-tl').addEventListener('click',e=>{const g=e.target.closest('.tl-ev');if(g&&g.dataset.href)window.open(g.dataset.href,'_blank','noopener')});
 $('#clear').onclick=()=>{blocks=[];$('#msg').textContent='';render()};
 $('#file').onchange=async e=>{
   for(const f of e.target.files){
