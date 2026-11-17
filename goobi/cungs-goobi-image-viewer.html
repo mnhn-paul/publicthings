@@ -95,6 +95,15 @@ dd{margin:0;overflow-wrap:anywhere}
 .gbadges{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
 .gbadge{font-size:11px;font-weight:600;background:var(--ac2);color:var(--ac);border-radius:var(--radius-sm);padding:1px 7px}
 .gbadge.tax{background:var(--lav2);color:var(--fg)}
+/* statistics (same look as the METS viewer's Statistics tab) */
+.stat{display:grid;grid-template-columns:1fr max-content 110px;gap:12px;align-items:center;margin:7px 0;font-size:14px}
+.stat .num{text-align:right;white-space:nowrap;color:var(--mut)}
+.pbar{height:8px;background:var(--bg);border:1px solid var(--bd);border-radius:var(--radius-sm);overflow:hidden}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--ac-h),var(--ac))}
+.statgroup{margin:18px 0 6px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.statlist{max-height:320px;overflow-y:auto;border-top:1px solid var(--bd);margin-top:6px;padding-top:4px}
+details.card>summary{cursor:pointer}
+@media (max-width:640px){.stat{grid-template-columns:1fr max-content}.stat .num{text-align:left}}
 /* page view: data panel left, zoomable scan right */
 .pv{display:flex;gap:14px;align-items:stretch}
 .pv-side{flex:0 0 400px;max-width:400px;max-height:calc(100vh - 210px);overflow-y:auto;display:flex;flex-direction:column;gap:0;padding-right:2px}
@@ -414,6 +423,61 @@ function renderBooksView(app){
   fillBooks();
   if(!bootStarted)startBooks();
 }
+/* ---------- per-book statistics (shown above the page gallery) ---------- */
+function bookStatsHtml(b){
+  const pct=(a,t)=>t?Math.round(100*a/t):0;
+  const bar=(a,t)=>`<span class="pbar"><i style="width:${pct(a,t)}%"></i></span>`;
+  const info=(l,v)=>`<div class="stat"><span>${l}</span><span class="num">${v}</span><span></span></div>`;
+  const row=(label,num,a,t)=>`<div class="stat"><span>${label}</span><span class="num">${num}</span>${t?bar(a,t):'<span></span>'}</div>`;
+
+  /* site visits: one observation event = one row; a "visit" = locality + date */
+  const locs=new Map(),visits=new Set();
+  let withDate=0;
+  b.rows.forEach(r=>{
+    const d=(r.f.DwCeventDate||'').trim(),l=(r.f.DwClocality||'').trim();
+    if(d)withDate++;
+    const key=l||'(no locality)';
+    locs.set(key,(locs.get(key)||0)+1);
+    if(d)visits.add(d+' @ '+key);
+  });
+  const locList=[...locs.entries()].sort((x,y)=>y[1]-x[1]||x[0].toLowerCase().localeCompare(y[0].toLowerCase()));
+  const evPages=new Set();b.rows.forEach(r=>r.pages.forEach(p=>evPages.add(p.order)));
+
+  /* taxa: grouped by the name as written, standard name shown when curated */
+  const tx=new Map();
+  b.rows.forEach(r=>r.occ.forEach(o=>{
+    const n=(o.DwCscientificName||'').trim()||'(no name)';
+    const e=tx.get(n)||{obs:0,ind:0};
+    e.obs++;
+    const c=parseFloat(String(o.DwCindividualCount??'').replace(',','.'));
+    if(isFinite(c))e.ind+=c;
+    tx.set(n,e);
+  }));
+  const txList=[...tx.entries()].sort((x,y)=>y[1].obs-x[1].obs||x[0].toLowerCase().localeCompare(y[0].toLowerCase()));
+
+  const locRows=locList.map(([l,n])=>{
+    const co=coords[l];
+    return row(esc(l)+(co&&co.com?` <span class="m">· ${esc(co.com)}</span>`:''),`${n} / ${b.rows.length} (${pct(n,b.rows.length)}%)`,n,b.rows.length);
+  }).join('');
+  const txRows=txList.map(([n,e])=>{
+    const t=taxa[n]||{};
+    return row(`<i>${esc(n)}</i>${t.std&&t.std!==n?` → <b>${esc(t.std)}</b>`:''}`,`${e.obs} / ${b.nOcc} (${pct(e.obs,b.nOcc)}%)${e.ind?` · ×${e.ind} ind.`:''}`,e.obs,b.nOcc);
+  }).join('');
+
+  return `<details class="card" open><summary><strong>Statistics for this book</strong> <span class="m">· ${b.rows.length} events · ${locs.size} sites · ${tx.size} taxa</span></summary>
+    <div class="statgroup">Site visits</div>
+    ${info('Observation events (site visits)',b.rows.length)}
+    ${info('… with a date',withDate)}
+    ${info('Site + date visits',visits.size)}
+    ${info('Distinct sites (localities)',locs.size)}
+    ${info('Pages with events',evPages.size+' / '+b.pages.length)}
+    ${locList.length?`<div class="statlist">${locRows}</div>`:''}
+    <div class="statgroup">Species observed</div>
+    ${info('Distinct taxa',tx.size)}
+    ${info('Occurrence records',b.nOcc)}
+    ${txList.length?`<div class="statlist">${txRows}</div>`:''}
+  </details>`;
+}
 function renderBookView(app,id){
   const b=books.get(id),e=bookErrs.get(id);
   if(e){
@@ -435,6 +499,7 @@ function renderBookView(app,id){
       <a class="btn sec" href="${METS_VIEWER}?url=${encodeURIComponent(b.docId)}" target="_blank" rel="noopener">METS viewer ↗</a>
       <a class="btn sec" href="${esc(pageUrl(b,1))}" target="_blank" rel="noopener">Goobi viewer ↗</a>
     </div></div>
+    ${bookStatsHtml(b)}
     <div class="ggrid">${b.pages.map(pg=>{
       const ev=evOf(pg),tx=taxOf(pg),t=imgSrcOf(pg,240);
       return`<a class="gcard" href="#page/${encodeURIComponent(id)}/${pg.order}" title="Open page ${pg.order}">
