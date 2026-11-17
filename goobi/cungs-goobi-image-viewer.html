@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Page-by-page image viewer for the Josy Cungs field notebooks: zoomable scans with the observation events and taxa recorded on each page.">
+<title>Image viewer</title>
+<link rel="stylesheet" href="../assets/theme.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<script src="../assets/nav.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:26px 22px 40px;background:var(--bg);color:var(--fg);transition:background-color .25s ease,color .25s ease}
+main{max-width:1280px;margin:0 auto}
+::selection{background:var(--ac);color:var(--on-ac)}
+a{color:var(--ac)}
+a:hover{color:var(--ac-h)}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;font-size:.92em;background:var(--ac2);padding:1px 5px;border-radius:var(--radius-sm)}
+/* hero header, inspired by mnhn.public.lu (folded into the shared top bar by nav.js) */
+.hdr{position:relative;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;
+margin-bottom:24px;padding:30px 32px;border-radius:var(--radius);color:var(--hdr-fg);
+background:linear-gradient(130deg,var(--hdr1),var(--hdr2));box-shadow:var(--sh);overflow:hidden}
+.hdr::after{content:"";position:absolute;inset:0;pointer-events:none;
+background:radial-gradient(560px 220px at 88% -60px,rgba(255,255,255,.16),transparent 70%)}
+.brand{display:flex;align-items:center;gap:18px;min-width:0}
+.mark{width:54px;height:54px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
+background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28)}
+.hdr h1{font-size:27px;font-weight:600;margin:0 0 5px;letter-spacing:.2px}
+.hdr .sub{color:var(--hdr-sub);margin:0;max-width:64ch}
+/* headings & text */
+h2{font-size:20px;font-weight:600;margin:0}
+h3{font-size:12px;margin:18px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.sub,.m{color:var(--mut)}
+/* cards & layout */
+.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* forms */
+textarea,input[type=text]{width:100%;padding:9px 12px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:88px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;font-size:13px}
+textarea:focus,input[type=text]:focus{outline:none;border-color:var(--ac);box-shadow:var(--ring)}
+/* buttons */
+button,label.btn{padding:9px 16px;border:1px solid transparent;border-radius:var(--radius-sm);background:var(--ac);color:var(--on-ac);font:inherit;font-weight:600;font-size:14px;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+button:hover,label.btn:hover{background:var(--ac-h)}
+button:active{transform:translateY(1px)}
+button:disabled{background:var(--bd);color:var(--mut);cursor:not-allowed;transform:none}
+button.sec,label.sec,a.sec{background:transparent;color:var(--ac);border-color:var(--bd)}
+button.sec:hover,label.sec:hover,a.sec:hover{background:var(--ac2);border-color:var(--ac)}
+button.x{border-color:var(--err);color:var(--err);background:transparent}
+button.x:hover{background:var(--err2)}
+a.btn{display:inline-block;padding:9px 16px;border:1px solid transparent;border-radius:var(--radius-sm);background:var(--ac);color:var(--on-ac);font-weight:600;font-size:14px;text-decoration:none}
+a.btn:hover{background:var(--ac-h);color:var(--on-ac)}
+a.btn.sec{background:transparent;color:var(--ac);border-color:var(--bd)}
+a.btn.sec:hover{background:var(--ac2);border-color:var(--ac);color:var(--ac)}
+button:focus-visible,label.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+details.opt{margin-top:12px;color:var(--mut)}
+details.opt summary{cursor:pointer}
+details.opt .row{margin-top:8px}
+#msg{margin-top:12px}
+.err{color:var(--err)}
+.warn{color:var(--warn)}
+.bar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin:26px 0 14px}
+.bar h2 .crumb{color:var(--ac);text-decoration:none}
+.bar h2 .crumb:hover{color:var(--ac-h)}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}
+dt{color:var(--mut)}
+dd{margin:0;overflow-wrap:anywhere}
+.pg a{display:inline-block;margin:0 4px 3px 0;padding:1px 9px;border-radius:var(--radius-sm);background:var(--ac2);color:var(--ac);text-decoration:none;font-size:12.5px;font-weight:600}
+.pg a:hover{background:var(--ac);color:var(--on-ac)}
+.pg a.cur{background:var(--ac);color:var(--on-ac)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.chip{border:1px solid var(--bd);background:var(--bg);border-radius:var(--radius-sm);padding:3px 11px;font-size:13px}
+.chip b{color:var(--ac)}
+.chip small{color:var(--mut)}
+.occ{margin:4px 0}
+.taxmap{font-size:12px;color:var(--mut);margin:2px 0 8px 2px}
+.taxmap b{color:var(--ac)}
+.acts{margin-top:16px}
+/* books overview */
+.books{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.bcard{display:block;text-decoration:none;color:inherit}
+.bcard:hover{border-color:var(--ac)}
+.bthumb{display:flex;align-items:center;justify-content:center;height:210px;background:var(--soft);border:1px solid var(--bd);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden}
+.bthumb img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.bthumb.loading{color:var(--mut);font-size:13px}
+.btitle{display:block;font-weight:600;font-size:15px}
+.bmeta{display:block;font-size:12.5px;margin-top:3px}
+/* page gallery */
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.gcard{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--bd);border-radius:var(--radius);overflow:hidden}
+.gcard:hover{border-color:var(--ac);box-shadow:var(--sh)}
+.gthumb{display:flex;align-items:center;justify-content:center;height:170px;background:var(--soft)}
+.gthumb img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.gthumb .m{font-size:12px}
+.glabel{display:block;padding:7px 10px;font-size:13px;font-weight:600;border-top:1px solid var(--bd)}
+.gbadges{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.gbadge{font-size:11px;font-weight:600;background:var(--ac2);color:var(--ac);border-radius:var(--radius-sm);padding:1px 7px}
+.gbadge.tax{background:var(--lav2);color:var(--fg)}
+/* page view: data panel left, zoomable scan right */
+.pv{display:flex;gap:14px;align-items:stretch}
+.pv-side{flex:0 0 400px;max-width:400px;max-height:calc(100vh - 210px);overflow-y:auto;display:flex;flex-direction:column;gap:0;padding-right:2px}
+.pv-side .card{margin-bottom:14px}
+.ev{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.ev:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.evhead{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}
+.evhead strong{font-size:14px}
+.stage{position:relative;flex:1;min-width:0;height:calc(100vh - 210px);min-height:440px;background:#23282a;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}
+.pageimg{max-width:100%;max-height:100%;display:block;cursor:zoom-in;transform-origin:center center;user-select:none;-webkit-user-drag:none}
+.stage.zoomed .pageimg{cursor:grab}
+.stage.zoomed .pageimg:active{cursor:grabbing}
+.loading,.error{color:#fff;padding:30px;text-align:center}
+.error a{color:#99CC99}
+.zoombar{position:absolute;top:10px;right:10px;display:flex;gap:6px}
+.zoombar button{width:36px;height:36px;padding:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:1;border:0}
+.zoombar button:hover{background:var(--ac)}
+.sidearrow{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;padding:0;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:18px;line-height:1;border:0;display:flex;align-items:center;justify-content:center}
+.sidearrow:hover{background:var(--ac)}
+.sidearrow.left{left:14px}
+.sidearrow.right{right:14px}
+.sidearrow:disabled{background:rgba(0,0,0,.30);color:#9aa39d;cursor:not-allowed}
+@media (max-width:700px){.sidearrow{display:none}}
+.progress{height:6px;background:var(--bg);border:1px solid var(--bd);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:14px}
+.progress>div{height:100%;background:var(--ac);width:0;transition:width .2s}
+.hint{color:var(--mut);font-size:12.5px;margin-top:10px}
+/* footer */
+.footer{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:30px;padding-top:14px;border-top:1px solid var(--bd);color:var(--mut);font-size:13px}
+@media (max-width:960px){
+.pv{flex-direction:column}
+.pv-side{flex:none;max-width:none;width:100%;max-height:none}
+.stage{height:70vh;width:100%}
+}
+@media (max-width:640px){
+body{padding:14px 12px 24px}
+.hdr{padding:20px 22px}
+}
+</style>
+</head>
+<body>
+<main>
+<header class="hdr">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-5 0-8-3.5-8-8 0-6 4-9 14-10 1 11-2 18-6 18z"/><path d="M12 21c2-5 4-8 8-11"/></svg>
+    </span>
+    <div>
+      <h1>Image viewer</h1>
+      <p class="sub">Page-by-page viewer for the Josy Cungs field notebooks: zoomable scans with the observation events and taxa recorded on each page.</p>
+    </div>
+  </div>
+</header>
+
+<div class="card" id="loader">
+  <textarea id="urls" aria-label="Record IDs or METS URLs" placeholder="One record ID (e.g. MNHNL2024-6-01) or full METS URL per line"></textarea>
+  <div class="row" style="margin-top:10px">
+    <button id="go">Load</button>
+    <button class="sec" id="allcungs">Load all Cungs books (MNHNL2024-6-01 … 6-49)</button>
+    <button class="sec x" id="clear">Clear</button>
+  </div>
+  <details class="opt">
+    <summary>Options (CORS proxy, record IDs)</summary>
+    <div class="row"><input type="text" id="proxy" placeholder="Optional proxy prefix, e.g. https://corsproxy.example/?url="></div>
+    <p>A bare record ID such as <code>MNHNL2024-6-01</code> is expanded to <code>https://face.mnhn.gov.lu/viewer/sourcefile?id=…</code>; the page scans are loaded from the record's IIIF manifest (<code>/viewer/api/v1/records/…/manifest/</code>). Event and taxon data per page come from the METS/MODS file, and taxon names / localities already curated in the <a href="cungs-goobi-mets-viewer.html">METS event viewer</a> are shown here as well.</p>
+  </details>
+  <div id="msg"></div>
+</div>
+
+<div id="view"></div>
+
+<footer class="footer">
+  <span>Page viewer for the Josy Cungs field notebooks · Musée national d'histoire naturelle Luxembourg</span>
+  <span><a href="cungs-goobi-mets-viewer.html">METS event viewer</a> · Source scans: <a href="https://face.mnhn.gov.lu/viewer/" target="_blank" rel="noopener">face.mnhn.gov.lu</a></span>
+</footer>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const all=(n,ln)=>n?[...n.getElementsByTagName('*')].filter(e=>e.localName===ln):[];
+const first=(n,ln)=>all(n,ln)[0];
+const txt=e=>e?e.textContent.trim().replace(/\s+/g,' '):'';
+const XLINK='http://www.w3.org/1999/xlink';
+const DEFAULT_BASE='https://face.mnhn.gov.lu';
+const API=DEFAULT_BASE+'/viewer/api/v1/records/';
+const METS_VIEWER='cungs-goobi-mets-viewer.html';
+const sourceUrl=id=>DEFAULT_BASE+'/viewer/sourcefile?id='+encodeURIComponent(id);
+const manifestUrl=id=>API+encodeURIComponent(id)+'/manifest/';
+const pageUrl=(b,n)=>`${b.base}/viewer/fullscreen/${encodeURIComponent(b.docId)}/${n}/`;
+
+const PREF=['DwCeventDate','DwCeventTime','DwClocality','eventTemperature','eventWeather'];
+const LABEL={DwCeventDate:'Date',DwCeventTime:'Time',DwClocality:'Locality',eventTemperature:'Temp. (°C)',eventWeather:'Weather'};
+const labelOf=c=>LABEL[c]||c.replace(/^DwC/,'');
+const KNOWN_OCC=['DwCscientificName','DwCindividualCount','DwCoccurrenceRemarks'];
+
+/* curation shared with the METS event viewer (same localStorage keys) */
+let taxa={};try{taxa=JSON.parse(localStorage.getItem('mets-taxa-map')||'{}')||{}}catch(e){}
+let coords={};try{coords=JSON.parse(localStorage.getItem('mets-loc-coords')||'{}')||{}}catch(e){}
+
+/* ---------- IIIF manifest helpers (same scheme as the specimen browser) ---------- */
+const LANGS=['en','de','none'];
+const langText=v=>{
+  if(v==null)return'';
+  if(typeof v==='string')return v.trim();
+  if(Array.isArray(v)){
+    if(v.length&&v.every(e=>e&&typeof e==='object'&&'@value' in e)){
+      for(const l of LANGS){const hit=v.find(e=>e['@language']===l&&langText(e['@value']));if(hit)return langText(hit['@value'])}
+      return(v.map(e=>langText(e['@value'])).filter(Boolean))[0]||'';
+    }
+    return v.map(e=>langText(e)).filter(Boolean).join('; ');
+  }
+  if(typeof v==='object'){
+    if('@value' in v)return langText(v['@value']);
+    for(const key of[...LANGS,...Object.keys(v)]){const t=langText(v[key]);if(t)return t}
+  }
+  return String(v);
+};
+function canvasesOf(m){
+  let cs=[];
+  if(Array.isArray(m.sequences))m.sequences.forEach(s=>{if(s.canvases)cs=cs.concat(s.canvases)});
+  if(!cs.length&&Array.isArray(m.items))cs=cs.concat(m.items);   // IIIF Presentation 3
+  return cs.map(c=>{
+    const ann=(c.images&&c.images[0])||((c.items&&c.items[0]&&c.items[0].items&&c.items[0].items[0])||{});
+    const res=ann.resource||ann.body||{};
+    const svc=res.service&&(Array.isArray(res.service)?res.service[0]:res.service);
+    return{label:langText(c.label)||'',serviceId:svc&&(svc['@id']||svc.id)||'',fallback:res['@id']||res.id||''};
+  });
+}
+const imgUrl=(p,w)=>p.serviceId?p.serviceId.replace(/\/$/,'')+'/full/'+w+',/0/default.jpg':(p.fallback||'');
+
+/* ---------- METS parsing (same extraction as the METS event viewer) ---------- */
+function parseXml(t){
+  let d=new DOMParser().parseFromString(t,'application/xml');
+  if(d.getElementsByTagName('parsererror').length){
+    const ns=' xmlns:mets="http://www.loc.gov/METS/" xmlns:mods="http://www.loc.gov/mods/v3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dv="http://dfg-viewer.de/" xmlns:intranda="http://intranda.com/"';
+    d=new DOMParser().parseFromString(t.replace(/<mets:mets(?=[\s>])/,'<mets:mets'+ns),'application/xml');
+    if(d.getElementsByTagName('parsererror').length) throw new Error('Not valid XML: '+txt(d.getElementsByTagName('parsererror')[0]).slice(0,200));
+  }
+  return d;
+}
+function parse(xml,src){
+  const doc=parseXml(xml);
+  if(!all(doc,'mets').length) throw new Error('No METS root element found.');
+  const files={};
+  all(doc,'file').forEach(f=>{const l=first(f,'FLocat');if(l)files[f.getAttribute('ID')]=l.getAttribute('xlink:href')||l.getAttributeNS(XLINK,'href')||''});
+  const physById={};
+  all(doc,'div').filter(d=>/^PHYS_\d+$/.test(d.getAttribute('ID')||'')).forEach(d=>{
+    const fp=first(d,'fptr');
+    physById[d.getAttribute('ID')]={order:+d.getAttribute('ORDER'),orderlabel:d.getAttribute('ORDERLABEL')||'',url:fp?files[fp.getAttribute('FILEID')]||'':''};
+  });
+  const pages=Object.values(physById).sort((a,b)=>a.order-b.order);
+  const links={};
+  all(doc,'smLink').forEach(l=>{const f=l.getAttribute('xlink:from')||l.getAttributeNS(XLINK,'from'),t=l.getAttribute('xlink:to')||l.getAttributeNS(XLINK,'to');(links[f]=links[f]||[]).push(t)});
+  const dmd={};
+  all(doc,'dmdSec').forEach(s=>dmd[s.getAttribute('ID')]=s);
+  const inOcc=n=>{for(let p=n.parentNode;p&&p.nodeType===1;p=p.parentNode)if(p.localName==='taxonOccurrence')return true;return false};
+  const notes=s=>all(s,'note').filter(n=>!inOcc(n)).map(n=>[n.getAttribute('type')||'',txt(n)]);
+  const occsOf=s=>s?all(s,'taxonOccurrence').map(o=>{const x={};all(o,'note').forEach(n=>{const k=n.getAttribute('type');if(k)x[k]=txt(n)});return x}).filter(x=>Object.keys(x).length):[];
+  const sm=all(doc,'structMap').find(s=>s.getAttribute('TYPE')==='LOGICAL');
+  const logs=sm?all(sm,'div').filter(d=>d.getAttribute('ID')):[];
+  const rows=[],colSet=new Set();
+  logs.forEach(d=>{
+    const sec=dmd[d.getAttribute('DMDID')];
+    const f={};if(sec)notes(sec).filter(([k])=>/^(DwC|event)/i.test(k)).forEach(([k,v])=>{f[k]=v;colSet.add(k)});
+    const occ=occsOf(sec);
+    if(!Object.keys(f).length&&!occ.length&&!/event/i.test(d.getAttribute('TYPE')||''))return;
+    const pgs=(links[d.getAttribute('ID')]||[]).map(p=>physById[p]).filter(Boolean).sort((a,b)=>a.order-b.order);
+    rows.push({log:d.getAttribute('ID'),sec:d.getAttribute('DMDID')||'—',type:d.getAttribute('TYPE')||'',f,pages:pgs,occ});
+  });
+  const nOcc=rows.reduce((a,r)=>a+r.occ.length,0);
+  const cols=[...PREF.filter(c=>colSet.has(c)),...[...colSet].filter(c=>!PREF.includes(c)).sort()];
+  const docId=txt(first(doc,'recordIdentifier'))||((src.match(/[?&]id=([^&]+)/)||[])[1]||'');
+  let base=DEFAULT_BASE;try{if(/^https?:/i.test(src))base=new URL(src).origin}catch(e){}
+  const s0=(logs[0]&&dmd[logs[0].getAttribute('DMDID')])||Object.values(dmd)[0];
+  const nt=t=>all(s0,'note').filter(n=>n.getAttribute('type')===t).map(txt).join(' | ');
+  const meta={title:txt(first(s0,'title')),year:txt(first(s0,'dateIssued')),by:nt('ownership'),desc:nt('content')};
+  return{src,docId,base,meta,rows,cols,pages,nOcc};
+}
+
+/* ---------- book loading (METS for data + IIIF manifest for scans) ---------- */
+const books=new Map(),pending=new Map(),bookErrs=new Map();
+let bookIds=[];
+function imgSrcOf(pg,w){
+  if(pg.img&&pg.img.serviceId)return imgUrl(pg.img,w);
+  if(pg.img&&pg.img.fallback)return pg.img.fallback;
+  return/^https?:/i.test(pg.url||'')?pg.url:'';
+}
+async function loadBook(id){
+  if(books.has(id))return books.get(id);
+  if(pending.has(id))return pending.get(id);
+  const p=(async()=>{
+    const px=$('#proxy').value.trim();
+    const get=async u=>{const r=await fetch(px?px+encodeURIComponent(u):u);if(!r.ok)throw new Error('HTTP '+r.status);return r};
+    const su=sourceUrl(id);
+    const[mx,mm]=await Promise.all([get(su).then(r=>r.text()),get(manifestUrl(id)).then(r=>r.json())]);
+    const m=parse(mx,su);
+    const mps=canvasesOf(mm);
+    const byOrder=new Map();
+    mps.forEach((c,i)=>{const n=parseInt(String(c.label||'').replace(/[^0-9]/g,''),10);byOrder.set(isNaN(n)?i+1:n,c)});
+    const pages=m.pages.map((pg,i)=>{
+      const c=byOrder.get(pg.order)||byOrder.get(i+1)||mps[i]||null;
+      return{order:pg.order,orderlabel:pg.orderlabel||'',url:pg.url||'',img:c};
+    });
+    const eventsByPage=new Map();
+    m.rows.forEach(r=>r.pages.forEach(pg=>{const a=eventsByPage.get(pg.order)||[];a.push(r);eventsByPage.set(pg.order,a)}));
+    const b={docId:m.docId||id,base:m.base,meta:m.meta,rows:m.rows,cols:m.cols,pages,eventsByPage,nOcc:m.nOcc,manifestLabel:langText(mm.label)||''};
+    b.thumb=pages.length?imgSrcOf(pages[0],320):'';
+    books.set(id,b);
+    return b;
+  })();
+  pending.set(id,p);
+  p.catch(e=>{bookErrs.set(id,(e&&e.message)||String(e))}).then(()=>pending.delete(id));
+  return p;
+}
+function ensureBook(id){
+  if(books.has(id)||bookErrs.has(id))return;
+  if(!pending.has(id))loadBook(id);
+  pending.get(id).then(()=>render()).catch(()=>render());
+}
+const idOf=s=>{
+  s=String(s||'').trim();if(!s)return null;
+  const m=s.match(/[?&]id=([^&]+)/);if(m)return decodeURIComponent(m[1]);
+  if(/^https?:/i.test(s)){try{const seg=new URL(s).pathname.split('/').filter(Boolean).pop();return seg?decodeURIComponent(seg):s}catch(e){return s}}
+  return s;
+};
+const idsFromText=t=>[...new Set(String(t||'').split(/\r?\n/).map(idOf).filter(Boolean))];
+const setMsg=t=>{const m=$('#msg');m.className='';m.textContent=t};
+async function loadAll(ids){
+  const total=ids.length;let done=0;
+  const q=[...new Set(ids)];
+  if(!q.length)return;
+  setMsg(`Loading ${total} book(s)…`);
+  const W=Math.min(6,q.length);
+  await Promise.all(Array.from({length:W},async()=>{
+    while(q.length){
+      const id=q.shift();
+      try{await loadBook(id)}catch(e){/* recorded in bookErrs */}
+      done++;setMsg(`Loading books… ${done}/${total}`);
+      if(route.view==='books')fillBooks();
+    }
+  }));
+  setMsg('');
+  if(route.view==='books')fillBooks();
+}
+let bootStarted=false;
+function startBooks(){
+  bootStarted=true;
+  bookIds=idsFromText($('#urls').value);
+  if(!bookIds.length){fillBooks();return}
+  loadAll(bookIds);
+}
+
+/* ---------- rendering ---------- */
+function chip(o){
+  const raw=(o.DwCscientificName||'').trim(),t=raw?taxa[raw]||{}:{};
+  const extra=Object.keys(o).filter(k=>!KNOWN_OCC.includes(k)).map(k=>`${esc(k.replace(/^DwC/,''))}: ${esc(o[k])}`);
+  let h=`<span class="chip"><i>${esc(raw||'(no name)')}</i>`+(o.DwCindividualCount?` <b>×${esc(o.DwCindividualCount)}</b>`:'');
+  if(t.std&&t.std!==raw)h+=` → <b class="std">${esc(t.std)}</b>`;
+  if(o.DwCoccurrenceRemarks)h+=` <small>${esc(o.DwCoccurrenceRemarks)}</small>`;
+  if(extra.length)h+=` <small>${extra.join(', ')}</small>`;
+  h+='</span>';
+  const hi=['kingdom','phylum','class','order','family'].map(k=>t[k]).filter(x=>(x||'').trim()!=='');
+  const parts=[];
+  if(t.std&&t.std!==raw)parts.push(`<b class="std">${esc(t.std)}</b>`);
+  if(hi.length)parts.push(esc(hi.join(' › ')));
+  if(t.id)parts.push(`<code>${esc(t.id)}</code>`);
+  if(parts.length)h+=`<div class="taxmap">described as ${parts.join(' · ')}</div>`;
+  return`<div class="occ">${h}</div>`;
+}
+function sideHtml(b,id,pg,evs){
+  const nTax=evs.reduce((a,r)=>a+r.occ.length,0);
+  const rows=evs.map(r=>{
+    const flds=b.cols.map(c=>r.f[c]?`<dt>${esc(labelOf(c))}</dt><dd>${esc(r.f[c])}</dd>`:'').join('');
+    const loc=(r.f.DwClocality||'').trim(),co=loc?coords[loc]:null;
+    const locExtra=co?`<dt>Commune / coords</dt><dd>${esc([co.com||'',co.lat&&co.lng?`${co.lat}, ${co.lng}`:'',co.unc?`±${co.unc} m`:''].filter(Boolean).join(' · ')||'—')}</dd>`:'';
+    return`<div class="ev">
+      <div class="evhead"><strong>${esc(r.sec)}</strong><span class="m">· ${esc(r.type)}</span>
+        <span class="pg">${r.pages.map(p=>`<a href="#page/${encodeURIComponent(id)}/${p.order}" class="${p.order===pg.order?'cur':''}" title="Page ${p.order}">${p.order}</a>`).join('')}</span></div>
+      <dl>${flds}${locExtra}</dl>
+      ${r.occ.length?`<div class="chips">${r.occ.map(chip).join('')}</div>`:''}
+    </div>`;
+  }).join('');
+  return`<div class="card">
+      <h2 style="font-size:16px;margin:0 0 10px">Page ${pg.order}${pg.orderlabel?` <span class="m">· ${esc(pg.orderlabel)}</span>`:''}</h2>
+      <dl>
+        <dt>Book</dt><dd>${esc(b.meta.title||b.docId)}${b.meta.year?` · ${esc(b.meta.year)}`:''}</dd>
+        ${b.meta.by?`<dt>Owner / author</dt><dd>${esc(b.meta.by)}</dd>`:''}
+        <dt>Events on this page</dt><dd>${evs.length||'–'}</dd>
+        <dt>Taxa on this page</dt><dd>${nTax||'–'}</dd>
+        ${pg.url?`<dt>Scan file</dt><dd><a href="${esc(pg.url)}" target="_blank" rel="noopener">${esc(pg.url)}</a></dd>`:''}
+      </dl>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Observation events on this page</h3>
+      ${evs.length?rows:'<p class="m" style="margin:0">No observation events are linked to this page.</p>'}
+    </div>`;
+}
+function fillBooks(){
+  const el=$('#books');if(!el)return;
+  $('#btotal').textContent=bookIds.length?`(${bookIds.length} book${bookIds.length===1?'':'s'})`:'';
+  el.innerHTML=bookIds.length?bookIds.map(id=>{
+    const e=bookErrs.get(id);
+    if(e)return`<div class="card bcard"><strong class="err">${esc(id)}</strong><div class="err" style="font-size:12.5px;margin-top:4px">${esc(e)}</div><div class="row acts"><button class="x" data-retry="${esc(id)}">Retry</button></div></div>`;
+    const b=books.get(id);
+    if(!b)return`<div class="card bcard"><span class="bthumb loading">loading…</span><span class="btitle m">${esc(id)}</span></div>`;
+    return`<a class="card bcard" href="#book/${encodeURIComponent(id)}">
+      <span class="bthumb">${b.thumb?`<img src="${esc(b.thumb)}" alt="first page of ${esc(id)}" loading="lazy">`:'<span class="m">no image</span>'}</span>
+      <span class="btitle">${esc(b.meta.title||b.manifestLabel||b.docId)}</span>
+      <span class="bmeta m">${esc(b.docId)}${b.meta.year?` · ${esc(b.meta.year)}`:''} · ${b.pages.length} pages · ${b.rows.length} events · ${b.nOcc} occurrences</span>
+    </a>`;
+  }).join(''):'<p class="m">No books loaded — paste record IDs above and press Load.</p>';
+}
+function renderBooksView(app){
+  app.innerHTML=`<div class="bar"><h2>Books <span id="btotal" class="m"></span></h2>
+    <div class="row"><span class="m" style="font-size:13px">Choose a book to browse its pages — each card shows its first page.</span></div></div>
+    <div class="books" id="books"></div>`;
+  fillBooks();
+  if(!bootStarted)startBooks();
+}
+function renderBookView(app,id){
+  const b=books.get(id),e=bookErrs.get(id);
+  if(e){
+    app.innerHTML=`<div class="bar"><h2><a class="crumb" href="#books">← Books</a> <span class="m">· ${esc(id)}</span></h2></div>
+      <div class="card"><strong class="err">Failed to load ${esc(id)}</strong><div class="err" style="margin-top:4px">${esc(e)}</div>
+      <div class="row acts"><button class="x" data-retry="${esc(id)}">Retry</button></div></div>`;
+    return;
+  }
+  if(!b){
+    app.innerHTML=`<div class="bar"><h2><a class="crumb" href="#books">← Books</a> <span class="m">· ${esc(id)}</span></h2></div>
+      <div class="card m">Loading ${esc(id)}…</div>`;
+    ensureBook(id);return;
+  }
+  const evOf=pg=>(b.eventsByPage.get(pg.order)||[]).length;
+  const taxOf=pg=>(b.eventsByPage.get(pg.order)||[]).reduce((a,r)=>a+r.occ.length,0);
+  app.innerHTML=`<div class="bar">
+    <h2><a class="crumb" href="#books">← Books</a> ${esc(b.meta.title||b.manifestLabel||b.docId)} <span class="m">· ${esc(b.docId)}${b.meta.year?` · ${esc(b.meta.year)}`:''} · ${b.pages.length} pages · ${b.rows.length} events · ${b.nOcc} occurrences</span></h2>
+    <div class="row">
+      <a class="btn sec" href="${METS_VIEWER}?url=${encodeURIComponent(b.docId)}" target="_blank" rel="noopener">METS viewer ↗</a>
+      <a class="btn sec" href="${esc(pageUrl(b,1))}" target="_blank" rel="noopener">Goobi viewer ↗</a>
+    </div></div>
+    <div class="ggrid">${b.pages.map(pg=>{
+      const ev=evOf(pg),tx=taxOf(pg),t=imgSrcOf(pg,240);
+      return`<a class="gcard" href="#page/${encodeURIComponent(id)}/${pg.order}" title="Open page ${pg.order}">
+        <span class="gthumb">${t?`<img src="${esc(t)}" alt="page ${pg.order}" loading="lazy">`:'<span class="m">no image</span>'}</span>
+        <span class="glabel">Page ${pg.order}${pg.orderlabel?` <span class="m">· ${esc(pg.orderlabel)}</span>`:''}
+          ${(ev||tx)?`<span class="gbadges">${ev?`<span class="gbadge">${ev} event${ev>1?'s':''}</span>`:''}${tx?`<span class="gbadge tax">${tx} taxon${tx>1?'a':''}</span>`:''}</span>`:''}</span>
+      </a>`;
+    }).join('')}</div>`;
+}
+function renderPageView(app,id,order){
+  const b=books.get(id),e=bookErrs.get(id);
+  if(e){
+    app.innerHTML=`<div class="bar"><h2><a class="crumb" href="#books">← Books</a> <span class="m">· ${esc(id)}</span></h2></div>
+      <div class="card"><strong class="err">Failed to load ${esc(id)}</strong><div class="err" style="margin-top:4px">${esc(e)}</div>
+      <div class="row acts"><button class="x" data-retry="${esc(id)}">Retry</button></div></div>`;
+    return;
+  }
+  if(!b){
+    app.innerHTML=`<div class="bar"><h2><a class="crumb" href="#books">← Books</a> <span class="m">· ${esc(id)}</span></h2></div>
+      <div class="card m">Loading ${esc(id)}…</div>`;
+    ensureBook(id);return;
+  }
+  const i=b.pages.findIndex(p=>p.order===order);
+  if(i<0){
+    app.innerHTML=`<div class="bar"><h2><a class="crumb" href="#book/${encodeURIComponent(id)}">← ${esc(b.meta.title||b.docId)}</a></h2></div>
+      <div class="card">Page ${esc(order)} was not found in ${esc(b.docId)} (${b.pages.length} pages). <a href="#book/${encodeURIComponent(id)}">Show all pages</a></div>`;
+    return;
+  }
+  const pg=b.pages[i],evs=b.eventsByPage.get(pg.order)||[];
+  app.innerHTML=`<div class="bar">
+    <h2><a class="crumb" href="#book/${encodeURIComponent(id)}">← ${esc(b.meta.title||b.docId)}</a> <span class="m">· page ${pg.order}${pg.orderlabel?` (${esc(pg.orderlabel)})`:''} of ${b.pages.length}</span></h2>
+    <div class="row">
+      <button class="sec" id="prevPg" ${i>0?'':'disabled'}>◀ Prev page</button>
+      <button class="sec" id="nextPg" ${i<b.pages.length-1?'':'disabled'}>Next page ▶</button>
+      <a class="btn sec" href="#book/${encodeURIComponent(id)}">All pages</a>
+      <a class="btn sec" href="${esc(pageUrl(b,pg.order))}" target="_blank" rel="noopener">Goobi viewer ↗</a>
+      <a class="btn sec" href="${METS_VIEWER}?url=${encodeURIComponent(b.docId)}" target="_blank" rel="noopener">METS viewer ↗</a>
+    </div></div>
+    <div class="progress"><div style="width:${100*(i+1)/b.pages.length}%"></div></div>
+    <div class="pv">
+      <aside class="pv-side">${sideHtml(b,id,pg,evs)}</aside>
+      <section class="stage" id="stage"><div class="loading">Loading page ${pg.order}…</div></section>
+    </div>
+    <div class="hint">Keyboard: → next page · ← previous page · click image to zoom in at that point (click again to reset) · drag / wheel / pinch to pan &amp; zoom · + / − zoom · Esc reset zoom</div>`;
+  const bp=$('#prevPg'),bn=$('#nextPg');
+  if(bp)bp.onclick=()=>navPage(-1);
+  if(bn)bn.onclick=()=>navPage(1);
+  showImage(b,pg);
+}
+
+/* ---------- pan & zoom (same scheme as the specimen browser) ---------- */
+let zoom={scale:1,tx:0,ty:0},applyZoom=null,stageZoomAt=null;
+function canNav(d){
+  const b=books.get(route.id);
+  if(!b||route.view!=='page')return false;
+  const i=b.pages.findIndex(p=>p.order===route.order);
+  return d<0?i>0:i<b.pages.length-1;
+}
+function showImage(b,pg){
+  const stage=$('#stage');if(!stage)return;
+  stage.innerHTML='';
+  zoom={scale:1,tx:0,ty:0};applyZoom=null;stageZoomAt=null;
+  const img=document.createElement('img');
+  img.className='pageimg';
+  img.alt='Page '+pg.order+' — '+(b.meta.title||b.docId);
+  img.draggable=false;
+  let hiRes=false,fell=false;
+  img.onerror=()=>{
+    if(!fell){
+      fell=true;
+      const alt=pg.img&&pg.img.serviceId?'':(/^https?:/i.test(pg.url||'')?pg.url:(pg.img?pg.img.fallback:''));
+      if(alt){img.src=alt;return}
+    }
+    stage.innerHTML=`<div class="error">Could not load the scan for page ${esc(pg.order)}.<br>
+      <a href="${esc(pageUrl(b,pg.order))}" target="_blank" rel="noopener">Open in the Goobi viewer ↗</a></div>`;
+  };
+  img.src=imgSrcOf(pg,1600);
+  stage.appendChild(img);
+  applyZoom=()=>{
+    const maxX=Math.max(0,(img.offsetWidth*zoom.scale-stage.clientWidth)/2);
+    const maxY=Math.max(0,(img.offsetHeight*zoom.scale-stage.clientHeight)/2);
+    zoom.tx=Math.min(maxX,Math.max(-maxX,zoom.tx));
+    zoom.ty=Math.min(maxY,Math.max(-maxY,zoom.ty));
+    img.style.transform=`translate(${zoom.tx}px, ${zoom.ty}px) scale(${zoom.scale})`;
+    stage.classList.toggle('zoomed',zoom.scale>1.001);
+    if(zoom.scale>1.4&&!hiRes){hiRes=true;const s=imgSrcOf(pg,3200);if(s&&s!==img.src)img.src=s}   // sharper when zoomed in
+  };
+  stageZoomAt=(ns,cx,cy)=>{
+    const sr=stage.getBoundingClientRect();
+    const px=cx-sr.left-sr.width/2,py=cy-sr.top-sr.height/2;
+    ns=Math.min(6,Math.max(1,ns));
+    zoom.tx=px-(px-zoom.tx)*ns/zoom.scale;
+    zoom.ty=py-(py-zoom.ty)*ns/zoom.scale;
+    zoom.scale=ns;
+    applyZoom();
+  };
+  const zoomBy=(f,cx,cy)=>stageZoomAt(zoom.scale*f,cx,cy);
+  stage.addEventListener('wheel',e=>{e.preventDefault();zoomBy(e.deltaY<0?1.15:1/1.15,e.clientX,e.clientY)},{passive:false});
+  const pts=new Map();let drag=null,pinch=null;
+  img.addEventListener('pointerdown',e=>{
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===1)drag={x:e.clientX,y:e.clientY,tx:zoom.tx,ty:zoom.ty,moved:false};
+    else{drag=null;const[a,c]=[...pts.values()];pinch={dist:Math.hypot(a.x-c.x,a.y-c.y),scale:zoom.scale}};
+    img.setPointerCapture(e.pointerId);
+  });
+  img.addEventListener('pointermove',e=>{
+    if(!pts.has(e.pointerId))return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch&&pts.size===2){
+      const[a,c]=[...pts.values()];
+      stageZoomAt(pinch.scale*Math.hypot(a.x-c.x,a.y-c.y)/pinch.dist,(a.x+c.x)/2,(a.y+c.y)/2);
+    }else if(drag&&zoom.scale>1){
+      const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+      if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
+      zoom.tx=drag.tx+dx;zoom.ty=drag.ty+dy;
+      applyZoom();
+    }
+  });
+  const pointerEnd=e=>{
+    pts.delete(e.pointerId);
+    if(pts.size<2)pinch=null;
+    if(pts.size>0)return;
+    const d=drag;drag=null;
+    if(!d||d.moved)return;
+    if(zoom.scale>1){zoom={scale:1,tx:0,ty:0};applyZoom()}
+    else stageZoomAt(2.5,e.clientX,e.clientY);
+  };
+  img.addEventListener('pointerup',pointerEnd);
+  img.addEventListener('pointercancel',pointerEnd);
+  const bar=document.createElement('div');bar.className='zoombar';
+  const center=()=>{const r=stage.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2]};
+  [['+','Zoom in (+)',()=>zoomBy(1.35,...center())],
+   ['−','Zoom out (−)',()=>zoomBy(1/1.35,...center())],
+   ['1:1','Reset zoom (Esc)',()=>{zoom={scale:1,tx:0,ty:0};applyZoom()}]].forEach(([g,t,fn])=>{
+    const b=document.createElement('button');b.textContent=g;b.title=t;b.onclick=fn;bar.appendChild(b);
+  });
+  stage.appendChild(bar);
+  [['left',-1,'◀'],['right',1,'▶']].forEach(([side,dir,glyph])=>{
+    const b=document.createElement('button');
+    b.className='sidearrow '+side;b.textContent=glyph;
+    b.title=(dir<0?'Previous':'Next')+' page ('+(dir<0?'←':'→')+')';
+    b.disabled=!canNav(dir);
+    b.onclick=e=>{e.stopPropagation();navPage(dir)};
+    stage.appendChild(b);
+  });
+}
+
+/* ---------- routing: view state lives in the URL hash ---------- */
+let route={view:'books'};
+const hashToRoute=h=>{
+  const p=(h||'').replace(/^#/,'').split('/').map(decodeURIComponent);
+  if(p[0]==='book'&&p[1])return{view:'book',id:p[1]};
+  if(p[0]==='page'&&p[1]&&p[2]!==undefined&&isFinite(+p[2]))return{view:'page',id:p[1],order:+p[2]};
+  return{view:'books'};
+};
+const setHash=h=>{if(location.hash===h)render();else location.hash=h};
+function navPage(d){
+  const b=books.get(route.id);if(!b)return;
+  const i=b.pages.findIndex(p=>p.order===route.order);
+  const n=b.pages[i+d];
+  if(n)setHash('#page/'+encodeURIComponent(route.id)+'/'+n.order);
+}
+function render(){
+  $('#loader').style.display=route.view==='books'?'':'none';
+  const app=$('#view');
+  if(route.view==='books')renderBooksView(app);
+  else if(route.view==='book')renderBookView(app,route.id);
+  else renderPageView(app,route.id,route.order);
+}
+window.addEventListener('hashchange',()=>{route=hashToRoute(location.hash);render()});
+
+/* ---------- controls & keyboard ---------- */
+$('#go').onclick=()=>{bootStarted=true;bookIds=idsFromText($('#urls').value);setHash('#books');if(!bookIds.length){fillBooks();return}loadAll(bookIds)};
+const cungsIds=[];for(let n=1;n<=49;n++)cungsIds.push('MNHNL2024-6-'+String(n).padStart(2,'0'));
+$('#allcungs').onclick=()=>{$('#urls').value=cungsIds.join('\n');$('#go').onclick()};
+$('#clear').onclick=()=>{books.clear();bookErrs.clear();bookIds=[];setMsg('');setHash('#books');fillBooks()};
+$('#view').addEventListener('click',e=>{
+  const r=e.target.closest('[data-retry]');if(!r)return;
+  const id=r.dataset.retry;bookErrs.delete(id);
+  loadBook(id).then(()=>render()).catch(()=>render());
+});
+document.addEventListener('keydown',e=>{
+  if(e.target&&(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'))return;
+  if(e.key==='Escape'){if(route.view==='page'&&applyZoom){zoom={scale:1,tx:0,ty:0};applyZoom()}return}
+  if(route.view!=='page')return;
+  if(e.key==='ArrowRight'){e.preventDefault();navPage(1)}
+  else if(e.key==='ArrowLeft'){e.preventDefault();navPage(-1)}
+  else if((e.key==='+'||e.key==='=')&&stageZoomAt){const r=$('#stage').getBoundingClientRect();stageZoomAt(zoom.scale*1.35,r.left+r.width/2,r.top+r.height/2)}
+  else if(e.key==='-'&&stageZoomAt){const r=$('#stage').getBoundingClientRect();stageZoomAt(zoom.scale/1.35,r.left+r.width/2,r.top+r.height/2)}
+});
+
+/* ---------- boot ---------- */
+const qp=new URLSearchParams(location.search).getAll('url');
+$('#urls').value=qp.length?qp.join('\n'):cungsIds.join('\n');
+route=hashToRoute(location.hash);
+render();
+if(route.view==='books')startBooks();
+else ensureBook(route.id);
+</script>
+</body>
+</html>

@@ -233,6 +233,8 @@ const PREF=['DwCeventDate','DwCeventTime','DwClocality','eventTemperature','even
 const LABEL={DwCeventDate:'Date',DwCeventTime:'Time',DwClocality:'Locality',eventTemperature:'Temp. (°C)',eventWeather:'Weather'};
 const labelOf=c=>LABEL[c]||c.replace(/^DwC/,'');
 const pageUrl=(b,n)=>`${b.base}/viewer/fullscreen/${encodeURIComponent(b.docId)}/${n}/`;
+const imgViewerPage=(id,n)=>'cungs-goobi-image-viewer.html#page/'+encodeURIComponent(id)+'/'+n;
+const imgViewerBook=id=>'cungs-goobi-image-viewer.html#book/'+encodeURIComponent(id);
 let blocks=[];
 let coords={};try{coords=JSON.parse(localStorage.getItem('mets-loc-coords')||'{}')||{}}catch(e){}
 const saveCoords=()=>{try{localStorage.setItem('mets-loc-coords',JSON.stringify(coords))}catch(e){}};
@@ -311,7 +313,7 @@ function tableHtml(b){
   return '<div class="tw"><table><thead><tr>'+head.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr></thead><tbody>'+
    b.rows.map(r=>'<tr><td>'+esc(r.sec)+'</td><td class="m">'+esc(r.type)+'</td>'+
      b.cols.map(c=>r.f[c]?`<td>${esc(r.f[c])}</td>`:'<td class="m">–</td>').join('')+
-     '<td class="pg">'+(r.pages.length?r.pages.map(p=>`<a href="${esc(pageUrl(b,p.order))}" target="_blank" rel="noopener" title="Open page ${p.order} in viewer">${p.order}</a>`).join(''):'<span class="m">–</span>')+'</td>'+
+     '<td class="pg">'+(r.pages.length?r.pages.map(p=>`<a href="${esc(imgViewerPage(b.docId,p.order))}" target="_blank" rel="noopener" title="Open page ${p.order} in the image viewer">${p.order}</a>`).join(''):'<span class="m">–</span>')+'</td>'+
      `<td>${r.occ.length||'<span class="m">–</span>'}</td></tr>`+
      (r.occ.length?`<tr class="sp"><td colspan="${head.length}"><details open><summary>${r.occ.length} taxa</summary><div class="chips">${r.occ.map(chip).join('')}</div></details></td></tr>`:'')
    ).join('')+'</tbody></table></div>';
@@ -327,6 +329,7 @@ function blockHtml(b,i){
       <button class="sec" data-act="table" data-i="${i}">Table CSV</button>
       <button data-act="dwca" data-i="${i}">Darwin Core Archive (zip)</button>
       <button class="sec" data-act="xlsx" data-i="${i}">Excel</button>
+      <button class="sec" data-act="viewer" data-i="${i}">Image viewer</button>
       <button class="x" data-act="rm" data-i="${i}">Remove</button>
     </div></details>`;
 }
@@ -695,6 +698,7 @@ $('#out').addEventListener('click',e=>{
   const act=t.dataset.act,i=t.dataset.i;
   if(act==='open'||act==='close'){blocks.forEach(b=>b.open=act==='open');render();return}
   if(act==='rm'){blocks.splice(+i,1);render();return}
+  if(act==='viewer'){const b=blocks[+i];if(b&&!b.err)window.open(imgViewerBook(b.docId),'_blank','noopener');return}
   const isAll=i==='all';
   exportFiles(act,isAll?blocks:[blocks[+i]],isAll?'combined':(blocks[+i].docId||'export'));
 });

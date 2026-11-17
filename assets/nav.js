@@ -40,6 +40,7 @@
     ]},
     { folder: 'goobi', tools: [
       { path: 'goobi/cungs-goobi-mets-viewer.html', label: 'METS viewer', desc: 'Extracts event notes from METS/MODS files and exports table, DwC Event Core or Excel.' },
+      { path: 'goobi/cungs-goobi-image-viewer.html', label: 'Image viewer', desc: 'Page-by-page viewer for the Cungs notebooks: zoomable scans with the events and taxa of each page.' },
       { path: 'goobi/digiento-viewer.html', label: 'Specimen browser', desc: 'Browse boxes and specimens from face.mnhn.gov.lu.' }
     ]}
   ];
@@ -53,6 +54,7 @@
     'gbif-col/mnhnl-checklists-overview.html': ['body>header'],
     'data.public/MNHNL_dataPublic_dashboard.html': ['body>h1', 'body>.subtitle'],
     'goobi/cungs-goobi-mets-viewer.html': ['main>header.hdr'],
+    'goobi/cungs-goobi-image-viewer.html': ['main>header.hdr'],
     'goobi/digiento-viewer.html': ['body>header h1']
   };
 
