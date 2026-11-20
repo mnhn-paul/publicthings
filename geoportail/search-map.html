@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Full-text place search on the Luxembourg geoportail API: the top 10 proposals are listed and all plotted at once on the geoportail basemap — hover a list entry to highlight its marker on the map.">
+<meta name="description" content="Full-text place search on the Luxembourg geoportail API: the top proposals are listed and all plotted at once on the geoportail basemap (load more for additional hits) — hover a list entry to highlight its marker on the map.">
 <title>Geoportail search map</title>
 <link rel="stylesheet" href="../assets/theme.css">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
@@ -40,6 +40,9 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 .chip{background:var(--soft);padding:1px 6px;border-radius:var(--radius-sm)}
 .coords{font-family:var(--mono);font-size:11px}
 #map{position:relative;min-width:0;min-height:0;background:var(--soft)}
+#moreWrap{padding:10px 16px;border-top:1px solid var(--bd)}
+#moreWrap button{width:100%}
+#moreWrap button:disabled{background:var(--bd);color:var(--mut);cursor:default}
 @media (max-width:880px){
   #app{grid-template-columns:1fr;grid-template-rows:minmax(170px,42%) minmax(0,1fr)}
   #side{border-right:0;border-bottom:1px solid var(--bd)}
@@ -51,7 +54,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
   <header class="hdr">
     <div>
       <h1>Geoportail search map</h1>
-      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its top 10 proposals as a list, and every one of them is plotted on the geoportail basemap at once. Hover a list entry to highlight its marker on the map; click to zoom to it.</p>
+      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once &mdash; use &ldquo;Load more&rdquo; for additional hits. Hover a list entry to highlight its marker on the map; click to zoom to it.</p>
     </div>
   </header>
   <div id="app">
@@ -70,6 +73,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
       </div>
       <div id="status">Type at least 2 characters.</div>
       <ol id="results"></ol>
+      <div id="moreWrap" hidden><button id="more" type="button">Load more results</button></div>
     </aside>
     <div id="map"></div>
   </div>
@@ -80,13 +84,19 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 
 var API = 'https://apiv4.geoportail.lu/fulltextsearch';
 var WMTS = 'https://wmts1.geoportail.lu/opendata/service';
-var LIMIT = 10;
+var PAGE = 10;        /* results per fetch */
+var MAXLIMIT = 200;   /* the API caps limit at 200 */
 
 var form = document.getElementById('f');
 var qEl = document.getElementById('q');
 var statusEl = document.getElementById('status');
 var listEl = document.getElementById('results');
 var bgEl = document.getElementById('bg');
+var moreWrap = document.getElementById('moreWrap');
+var moreBtn = document.getElementById('more');
+var shown = 0;          /* results currently displayed */
+var currentQuery = '';
+var mayHaveMore = false;
 
 var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -192,7 +202,8 @@ function lonlatOf(f){
   return [x / ring.length, y / ring.length];
 }
 
-function render(features, query){
+function render(features, query, fit){
+  if(fit === undefined) fit = true;
   source.clear();
   listEl.innerHTML = '';
   items = [];
@@ -257,7 +268,7 @@ function render(features, query){
     listEl.appendChild(li);
     items.push({marker: marker, area: area, li: li, ll: ll});
   });
-  if(items.length){
+  if(fit && items.length){
     var v = map.getView();
     if(ext[2] - ext[0] < 1 && ext[3] - ext[1] < 1){
       v.setCenter([ext[0], ext[1]]);
@@ -268,29 +279,70 @@ function render(features, query){
   }
 }
 
+/* the API has no offset parameter, so "load more" re-fetches with a larger
+   limit and re-renders the whole (larger) result set */
+function fetchFeatures(qv, limit, onOk){
+  if(ctrl) ctrl.abort();
+  ctrl = new AbortController();
+  return fetch(API + '?query=' + encodeURIComponent(qv) + '&limit=' + limit, {signal: ctrl.signal})
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data){ onOk(data.features || []); });
+}
+
+function updateMore(){
+  if(currentQuery && mayHaveMore){
+    moreWrap.hidden = false;
+    moreBtn.disabled = false;
+    moreBtn.textContent = 'Load ' + Math.min(PAGE, MAXLIMIT - shown) + ' more results';
+  } else {
+    moreWrap.hidden = true;
+  }
+}
+
 function run(query){
   var qv = query.trim();
   if(qv.length < 2){
     setStatus('Type at least 2 characters.');
     return;
   }
-  if(ctrl) ctrl.abort();
-  ctrl = new AbortController();
+  moreWrap.hidden = true;
   setStatus('Searching\u2026');
-  fetch(API + '?query=' + encodeURIComponent(qv) + '&limit=' + LIMIT, {signal: ctrl.signal})
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(function(data){ render(data.features || [], qv); })
-    .catch(function(e){
-      if(e && e.name === 'AbortError') return;
-      source.clear();
-      listEl.innerHTML = '';
-      items = [];
-      setStatus('Search failed: ' + (e && e.message ? e.message : e), true);
-    });
+  fetchFeatures(qv, PAGE, function(feats){
+    currentQuery = qv;
+    render(feats, qv, true);
+    shown = feats.length;
+    mayHaveMore = feats.length >= PAGE && feats.length < MAXLIMIT;
+    updateMore();
+  }).catch(function(e){
+    if(e && e.name === 'AbortError') return;
+    source.clear();
+    listEl.innerHTML = '';
+    items = [];
+    currentQuery = '';
+    setStatus('Search failed: ' + (e && e.message ? e.message : e), true);
+  });
 }
+
+function loadMore(){
+  if(!currentQuery || moreBtn.disabled) return;
+  var newLimit = Math.min(shown + PAGE, MAXLIMIT);
+  moreBtn.disabled = true;
+  moreBtn.textContent = 'Loading\u2026';
+  fetchFeatures(currentQuery, newLimit, function(feats){
+    render(feats, currentQuery, false);
+    shown = feats.length;
+    mayHaveMore = feats.length >= newLimit && feats.length < MAXLIMIT;
+    updateMore();
+  }).catch(function(e){
+    if(e && e.name === 'AbortError') return;
+    setStatus('Could not load more results: ' + (e && e.message ? e.message : e), true);
+    updateMore();
+  });
+}
+moreBtn.addEventListener('click', loadMore);
 
 var timer = null;
 qEl.addEventListener('input', function(){
