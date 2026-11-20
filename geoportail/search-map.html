@@ -9,7 +9,7 @@
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <script src="../assets/nav.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
-<script type="importmap">{"imports":{"ol/":"https://cdn.jsdelivr.net/npm/ol@9.2.4/"}}</script>
+<script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
 <style>
 html,body{height:100%}
 body{margin:0;display:flex;flex-direction:column;overflow:hidden}
@@ -74,40 +74,36 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
     <div id="map"></div>
   </div>
 </main>
-<script type="module">
-import Map from 'ol/Map.js';
-import View from 'ol/View.js';
-import TileLayer from 'ol/layer/Tile.js';
-import XYZ from 'ol/source/XYZ.js';
-import VectorLayer from 'ol/layer/Vector.js';
-import VectorSource from 'ol/source/Vector.js';
-import Feature from 'ol/Feature.js';
-import Point from 'ol/geom/Point.js';
-import GeoJSON from 'ol/format/GeoJSON.js';
-import {fromLonLat} from 'ol/proj.js';
-import {Circle as CircleStyle, Fill, Stroke, Style, Text} from 'ol/style.js';
+<script>
+(function(){
+'use strict';
 
-const API = 'https://apiv4.geoportail.lu/fulltextsearch';
-const WMTS = 'https://wmts1.geoportail.lu/opendata/service';
-const LIMIT = 10;
+var API = 'https://apiv4.geoportail.lu/fulltextsearch';
+var WMTS = 'https://wmts1.geoportail.lu/opendata/service';
+var LIMIT = 10;
 
-const form = document.getElementById('f');
-const qEl = document.getElementById('q');
-const statusEl = document.getElementById('status');
-const listEl = document.getElementById('results');
-const bgEl = document.getElementById('bg');
+var form = document.getElementById('f');
+var qEl = document.getElementById('q');
+var statusEl = document.getElementById('status');
+var listEl = document.getElementById('results');
+var bgEl = document.getElementById('bg');
 
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+}); };
 
 /* geoportail WMTS (KVP GetTile) — tile matrix set GLOBAL_WEBMERCATOR is the
    standard WebMercatorQuad grid, so a plain XYZ source works */
-const tileUrlFunction = layer => c =>
-  WMTS + '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + layer +
-  '&STYLE=default&TILEMATRIXSET=GLOBAL_WEBMERCATOR&TILEMATRIX=' + c[0] +
-  '&TILECOL=' + c[1] + '&TILEROW=' + c[2] + '&FORMAT=image/png';
+function tileUrlFunction(layer){
+  return function(c){
+    return WMTS + '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + layer +
+      '&STYLE=default&TILEMATRIXSET=GLOBAL_WEBMERCATOR&TILEMATRIX=' + c[0] +
+      '&TILECOL=' + c[1] + '&TILEROW=' + c[2] + '&FORMAT=image/png';
+  };
+}
 
-const baseLayer = new TileLayer({
-  source: new XYZ({
+var baseLayer = new ol.layer.Tile({
+  source: new ol.source.XYZ({
     tileUrlFunction: tileUrlFunction('basemap'),
     maxZoom: 19,
     attributions: 'Basemap &copy; <a href="https://geoportail.lu" target="_blank" rel="noopener">geoportail.lu</a> &mdash; Administration du cadastre et de la topographie, Grand-Duch&eacute; de Luxembourg'
@@ -115,38 +111,38 @@ const baseLayer = new TileLayer({
 });
 
 function styleFor(f){
-  const hl = !!f.get('hl');
+  var hl = !!f.get('hl');
   if(f.get('kind') === 'area'){
-    return new Style({
-      fill: new Fill({color: hl ? 'rgba(228,1,52,.16)' : 'rgba(0,77,157,.10)'}),
-      stroke: new Stroke({color: hl ? '#E40134' : '#004D9D', width: hl ? 3 : 1.5})
+    return new ol.style.Style({
+      fill: new ol.style.Fill({color: hl ? 'rgba(228,1,52,.16)' : 'rgba(0,77,157,.10)'}),
+      stroke: new ol.style.Stroke({color: hl ? '#E40134' : '#004D9D', width: hl ? 3 : 1.5})
     });
   }
-  return new Style({
-    image: new CircleStyle({
+  return new ol.style.Style({
+    image: new ol.style.Circle({
       radius: hl ? 14 : 10,
-      fill: new Fill({color: hl ? '#E40134' : '#004D9D'}),
-      stroke: new Stroke({color: '#FFFFFF', width: hl ? 3 : 2})
+      fill: new ol.style.Fill({color: hl ? '#E40134' : '#004D9D'}),
+      stroke: new ol.style.Stroke({color: '#FFFFFF', width: hl ? 3 : 2})
     }),
-    text: new Text({
+    text: new ol.style.Text({
       text: String(f.get('rank')),
       font: '700 12px Inter, system-ui, sans-serif',
-      fill: new Fill({color: '#FFFFFF'}),
+      fill: new ol.style.Fill({color: '#FFFFFF'}),
       textBaseline: 'middle'
     })
   });
 }
 
-const source = new VectorSource();
-const resultLayer = new VectorLayer({source: source, zIndex: 5, style: f => styleFor(f)});
+var source = new ol.source.Vector();
+var resultLayer = new ol.layer.Vector({source: source, zIndex: 5, style: function(f){ return styleFor(f); }});
 
-const center = fromLonLat([6.1296, 49.6116]);
-const lo = fromLonLat([5.70, 49.40]);
-const hi = fromLonLat([6.55, 50.19]);
-const map = new Map({
+var center = ol.proj.fromLonLat([6.1296, 49.6116]);
+var lo = ol.proj.fromLonLat([5.70, 49.40]);
+var hi = ol.proj.fromLonLat([6.55, 50.19]);
+var map = new ol.Map({
   target: 'map',
   layers: [baseLayer, resultLayer],
-  view: new View({
+  view: new ol.View({
     center: center,
     zoom: 8,
     minZoom: 7,
@@ -155,8 +151,8 @@ const map = new Map({
   })
 });
 
-let items = [];
-let ctrl = null;
+var items = [];
+var ctrl = null;
 
 function setStatus(msg, isErr){
   statusEl.textContent = msg;
@@ -164,7 +160,7 @@ function setStatus(msg, isErr){
 }
 
 function setHl(i, on){
-  const it = items[i];
+  var it = items[i];
   if(!it) return;
   it.marker.set('hl', on);
   if(it.area) it.area.set('hl', on);
@@ -172,9 +168,9 @@ function setHl(i, on){
 }
 
 function select(i){
-  const it = items[i];
+  var it = items[i];
   if(!it) return;
-  const v = map.getView();
+  var v = map.getView();
   if(it.area){
     v.fit(it.area.getGeometry().getExtent(), {padding: [60, 60, 60, 60], maxZoom: 16, duration: 450});
   } else {
@@ -182,17 +178,17 @@ function select(i){
   }
 }
 
-const gj = new GeoJSON();
+var gj = new ol.format.GeoJSON();
 
 /* representative point (lon/lat) of a result feature */
 function lonlatOf(f){
-  const g = f.geometry;
+  var g = f.geometry;
   if(g.type === 'Point') return g.coordinates;
   if(Array.isArray(f.bbox) && f.bbox.length === 4)
     return [(f.bbox[0] + f.bbox[2]) / 2, (f.bbox[1] + f.bbox[3]) / 2];
-  const ring = g.type === 'Polygon' ? g.coordinates[0] : g.coordinates[0][0];
-  let x = 0, y = 0;
-  ring.forEach(c => { x += c[0]; y += c[1]; });
+  var ring = g.type === 'Polygon' ? g.coordinates[0] : g.coordinates[0][0];
+  var x = 0, y = 0;
+  ring.forEach(function(c){ x += c[0]; y += c[1]; });
   return [x / ring.length, y / ring.length];
 }
 
@@ -206,29 +202,29 @@ function render(features, query){
   }
   setStatus(features.length + ' result' + (features.length > 1 ? 's' : '') + ' for \u201C' + query +
     '\u201D \u2014 all plotted on the map. Hover a row to highlight its marker.');
-  const ext = [Infinity, Infinity, -Infinity, -Infinity];
-  const growPoint = c => {
+  var ext = [Infinity, Infinity, -Infinity, -Infinity];
+  function growPoint(c){
     ext[0] = Math.min(ext[0], c[0]); ext[1] = Math.min(ext[1], c[1]);
     ext[2] = Math.max(ext[2], c[0]); ext[3] = Math.max(ext[3], c[1]);
-  };
-  const growExtent = e => {
+  }
+  function growExtent(e){
     ext[0] = Math.min(ext[0], e[0]); ext[1] = Math.min(ext[1], e[1]);
     ext[2] = Math.max(ext[2], e[2]); ext[3] = Math.max(ext[3], e[3]);
-  };
-  features.forEach((f, i) => {
-    const g = f.geometry;
+  }
+  features.forEach(function(f, i){
+    var g = f.geometry;
     if(!g) return;
-    const ll = lonlatOf(f);
-    const coord = fromLonLat(ll);
-    const marker = new Feature({geometry: new Point(coord)});
+    var ll = lonlatOf(f);
+    var coord = ol.proj.fromLonLat(ll);
+    var marker = new ol.Feature({geometry: new ol.geom.Point(coord)});
     marker.set('kind', 'marker');
     marker.set('rank', i + 1);
     marker.set('hl', false);
     marker.set('idx', i);
     source.addFeature(marker);
-    let area = null;
+    var area = null;
     if(g.type !== 'Point'){
-      const fs = gj.readFeatures({type: 'Feature', geometry: g, properties: {}},
+      var fs = gj.readFeatures({type: 'Feature', geometry: g, properties: {}},
         {dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'});
       if(fs.length){
         area = fs[0];
@@ -242,9 +238,9 @@ function render(features, query){
     } else {
       growPoint(coord);
     }
-    const label = (f.properties && f.properties.label) || '(no label)';
-    const layerName = (f.properties && f.properties.layer_name) || '';
-    const li = document.createElement('li');
+    var label = (f.properties && f.properties.label) || '(no label)';
+    var layerName = (f.properties && f.properties.layer_name) || '';
+    var li = document.createElement('li');
     li.tabIndex = 0;
     li.innerHTML =
       '<span class="rank">' + (i + 1) + '</span>' +
@@ -253,16 +249,16 @@ function render(features, query){
       (layerName ? '<span class="chip">' + esc(layerName) + '</span>' : '') +
       '<span class="coords">' + ll[0].toFixed(5) + ', ' + ll[1].toFixed(5) + '</span>' +
       '</span></span>';
-    li.addEventListener('mouseenter', () => setHl(i, true));
-    li.addEventListener('mouseleave', () => setHl(i, false));
-    li.addEventListener('focus', () => setHl(i, true));
-    li.addEventListener('blur', () => setHl(i, false));
-    li.addEventListener('click', () => select(i));
+    li.addEventListener('mouseenter', function(){ setHl(i, true); });
+    li.addEventListener('mouseleave', function(){ setHl(i, false); });
+    li.addEventListener('focus', function(){ setHl(i, true); });
+    li.addEventListener('blur', function(){ setHl(i, false); });
+    li.addEventListener('click', function(){ select(i); });
     listEl.appendChild(li);
     items.push({marker: marker, area: area, li: li, ll: ll});
   });
   if(items.length){
-    const v = map.getView();
+    var v = map.getView();
     if(ext[2] - ext[0] < 1 && ext[3] - ext[1] < 1){
       v.setCenter([ext[0], ext[1]]);
       v.setZoom(15);
@@ -272,8 +268,8 @@ function render(features, query){
   }
 }
 
-async function run(query){
-  const qv = query.trim();
+function run(query){
+  var qv = query.trim();
   if(qv.length < 2){
     setStatus('Type at least 2 characters.');
     return;
@@ -281,54 +277,56 @@ async function run(query){
   if(ctrl) ctrl.abort();
   ctrl = new AbortController();
   setStatus('Searching\u2026');
-  try{
-    const r = await fetch(API + '?query=' + encodeURIComponent(qv) + '&limit=' + LIMIT, {signal: ctrl.signal});
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
-    render(data.features || [], qv);
-  } catch(e){
-    if(e && e.name === 'AbortError') return;
-    source.clear();
-    listEl.innerHTML = '';
-    items = [];
-    setStatus('Search failed: ' + (e && e.message ? e.message : e), true);
-  }
+  fetch(API + '?query=' + encodeURIComponent(qv) + '&limit=' + LIMIT, {signal: ctrl.signal})
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data){ render(data.features || [], qv); })
+    .catch(function(e){
+      if(e && e.name === 'AbortError') return;
+      source.clear();
+      listEl.innerHTML = '';
+      items = [];
+      setStatus('Search failed: ' + (e && e.message ? e.message : e), true);
+    });
 }
 
-let timer = null;
-qEl.addEventListener('input', () => {
+var timer = null;
+qEl.addEventListener('input', function(){
   clearTimeout(timer);
-  timer = setTimeout(() => run(qEl.value), 350);
+  timer = setTimeout(function(){ run(qEl.value); }, 350);
 });
-form.addEventListener('submit', e => {
+form.addEventListener('submit', function(e){
   e.preventDefault();
   clearTimeout(timer);
   run(qEl.value);
 });
 
-bgEl.addEventListener('change', () => {
+bgEl.addEventListener('change', function(){
   baseLayer.getSource().setTileUrlFunction(tileUrlFunction(bgEl.value));
 });
 
-map.on('click', e => {
-  let hit = null;
-  map.forEachFeatureAtPixel(e.pixel, f => { hit = f; return true; }, {layerFilter: l => l === resultLayer});
+map.on('click', function(e){
+  var hit = null;
+  map.forEachFeatureAtPixel(e.pixel, function(f){ hit = f; return true; }, {layerFilter: function(l){ return l === resultLayer; }});
   if(hit){
-    const i = hit.get('idx');
+    var i = hit.get('idx');
     setHl(i, true);
     select(i);
-    setTimeout(() => setHl(i, false), 1500);
+    setTimeout(function(){ setHl(i, false); }, 1500);
   }
 });
 
-map.on('pointermove', e => {
-  const hit = map.forEachFeatureAtPixel(e.pixel, f => f, {layerFilter: l => l === resultLayer});
+map.on('pointermove', function(e){
+  var hit = map.forEachFeatureAtPixel(e.pixel, function(f){ return f; }, {layerFilter: function(l){ return l === resultLayer; }});
   map.getTargetElement().style.cursor = hit ? 'pointer' : '';
-  const idx = hit ? hit.get('idx') : -1;
-  items.forEach((it, i) => setHl(i, i === idx));
+  var idx = hit ? hit.get('idx') : -1;
+  items.forEach(function(it, i){ setHl(i, i === idx); });
 });
 
 run('Wangen');
+})();
 </script>
 </body>
 </html>
