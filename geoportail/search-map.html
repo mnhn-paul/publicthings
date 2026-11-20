@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Full-text place search on the Luxembourg geoportail API: the top proposals are listed and all plotted at once on the geoportail basemap (load more for additional hits) — hover a list entry to highlight its marker on the map.">
+<meta name="description" content="Full-text place search on the Luxembourg geoportail API: results are listed and all plotted at once on the geoportail basemap — filter by type (Adresse, lieu_dit, …), load more or all, hover to highlight, click to zoom and copy the WGS84 coordinates.">
 <title>Geoportail search map</title>
 <link rel="stylesheet" href="../assets/theme.css">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
@@ -40,9 +40,20 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 .chip{background:var(--soft);padding:1px 6px;border-radius:var(--radius-sm)}
 .coords{font-family:var(--mono);font-size:11px}
 #map{position:relative;min-width:0;min-height:0;background:var(--soft)}
-#moreWrap{padding:10px 16px;border-top:1px solid var(--bd)}
-#moreWrap button{width:100%}
+#moreWrap{display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--bd)}
+#moreWrap button{flex:1}
 #moreWrap button:disabled{background:var(--bd);color:var(--mut);cursor:default}
+#filterWrap{padding:7px 16px;border-bottom:1px solid var(--bd);max-height:96px;overflow-y:auto}
+#filters{display:flex;flex-wrap:wrap;gap:4px}
+.fchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 8px;border:1px solid var(--bd);border-radius:var(--radius-sm);cursor:pointer;background:var(--bg)}
+.fchip input{accent-color:var(--ac);margin:0}
+#selBar{position:absolute;left:12px;bottom:38px;z-index:20;display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);padding:8px 10px;max-width:calc(100% - 24px)}
+#selTxt{font-size:12.5px;min-width:0}
+#selTxt b{display:block;font-size:13px;overflow-wrap:anywhere}
+#selTxt .coords{color:var(--mut)}
+#selBar button{padding:6px 10px;font-size:12.5px;flex:none}
+#selClose{background:transparent;color:var(--mut);border:1px solid var(--bd)}
+#moreWrap[hidden],#selBar[hidden],#filterWrap[hidden]{display:none}
 @media (max-width:880px){
   #app{grid-template-columns:1fr;grid-template-rows:minmax(170px,42%) minmax(0,1fr)}
   #side{border-right:0;border-bottom:1px solid var(--bd)}
@@ -54,7 +65,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
   <header class="hdr">
     <div>
       <h1>Geoportail search map</h1>
-      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once &mdash; use &ldquo;Load more&rdquo; for additional hits. Hover a list entry to highlight its marker on the map; click to zoom to it.</p>
+      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates.</p>
     </div>
   </header>
   <div id="app">
@@ -72,10 +83,20 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
         </div>
       </div>
       <div id="status">Type at least 2 characters.</div>
+      <div id="filterWrap" hidden><div id="filters"></div></div>
       <ol id="results"></ol>
-      <div id="moreWrap" hidden><button id="more" type="button">Load more results</button></div>
+      <div id="moreWrap" hidden>
+        <button id="more" type="button">Load more results</button>
+        <button id="all" type="button">Load all results</button>
+      </div>
     </aside>
-    <div id="map"></div>
+    <div id="map">
+      <div id="selBar" hidden>
+        <div id="selTxt"></div>
+        <button id="copyBtn" type="button">Copy WGS84</button>
+        <button id="selClose" type="button" aria-label="Close">&times;</button>
+      </div>
+    </div>
   </div>
 </main>
 <script>
@@ -94,9 +115,22 @@ var listEl = document.getElementById('results');
 var bgEl = document.getElementById('bg');
 var moreWrap = document.getElementById('moreWrap');
 var moreBtn = document.getElementById('more');
-var shown = 0;          /* results currently displayed */
+var allBtn = document.getElementById('all');
+var filterWrap = document.getElementById('filterWrap');
+var filterBox = document.getElementById('filters');
+var selBar = document.getElementById('selBar');
+var selTxt = document.getElementById('selTxt');
+var copyBtn = document.getElementById('copyBtn');
+var selClose = document.getElementById('selClose');
+var limitTarget = PAGE;  /* limit used by the last fetch */
+var fetchedCount = 0;    /* features returned by the last fetch */
 var currentQuery = '';
 var mayHaveMore = false;
+var busy = false;
+var knownTypes = [];     /* layer names seen so far, for the type filters */
+var enabled = {};        /* layer name -> checkbox state */
+var ftimer = null;
+var selIdx = -1;
 
 var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -186,7 +220,60 @@ function select(i){
   } else {
     v.animate({center: it.marker.getGeometry().getCoordinates(), zoom: 15, duration: 450});
   }
+  showSel(i);
 }
+
+/* WGS84 coordinates as "xxxxx.xxxxx° N, xxxxx.xxxxx° E" */
+function fmtWGS84(ll){
+  var lat = ll[1], lon = ll[0];
+  return Math.abs(lat).toFixed(5) + '° ' + (lat >= 0 ? 'N' : 'S') + ', ' +
+         Math.abs(lon).toFixed(5) + '° ' + (lon >= 0 ? 'E' : 'W');
+}
+
+function showSel(i){
+  var it = items[i];
+  if(!it) return;
+  selIdx = i;
+  selTxt.innerHTML = '<b>' + esc(it.label) + '</b>' +
+    '<span class="coords">' + fmtWGS84(it.ll) + ' (WGS84)' +
+    (it.layerName ? ' · ' + esc(it.layerName) : '') + '</span>';
+  selBar.hidden = false;
+}
+
+function hideSel(){
+  selBar.hidden = true;
+  selIdx = -1;
+}
+
+function fallbackCopy(text){
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch(e){}
+  document.body.removeChild(ta);
+  return ok;
+}
+
+function copyText(text, cb){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ cb(true); }, function(){ cb(fallbackCopy(text)); });
+  } else {
+    cb(fallbackCopy(text));
+  }
+}
+
+copyBtn.addEventListener('click', function(){
+  if(selIdx < 0 || !items[selIdx]) return;
+  copyText(fmtWGS84(items[selIdx].ll), function(ok){
+    copyBtn.textContent = ok ? 'Copied!' : 'Copy failed';
+    setTimeout(function(){ copyBtn.textContent = 'Copy WGS84'; }, 1500);
+  });
+});
+selClose.addEventListener('click', hideSel);
 
 var gj = new ol.format.GeoJSON();
 
@@ -207,8 +294,14 @@ function render(features, query, fit){
   source.clear();
   listEl.innerHTML = '';
   items = [];
+  hideSel();
+  var total = features.length;
+  features = features.filter(function(f){
+    return enabled[(f.properties && f.properties.layer_name) || ''] !== false;
+  });
   if(!features.length){
-    setStatus('No results for \u201C' + query + '\u201D.');
+    setStatus(total ? 'All ' + total + ' result' + (total > 1 ? 's are' : ' is') + ' hidden by the type filters.'
+                    : 'No results for \u201C' + query + '\u201D.');
     return;
   }
   setStatus(features.length + ' result' + (features.length > 1 ? 's' : '') + ' for \u201C' + query +
@@ -266,7 +359,7 @@ function render(features, query, fit){
     li.addEventListener('blur', function(){ setHl(i, false); });
     li.addEventListener('click', function(){ select(i); });
     listEl.appendChild(li);
-    items.push({marker: marker, area: area, li: li, ll: ll});
+    items.push({marker: marker, area: area, li: li, ll: ll, label: label, layerName: layerName});
   });
   if(fit && items.length){
     var v = map.getView();
@@ -279,12 +372,15 @@ function render(features, query, fit){
   }
 }
 
-/* the API has no offset parameter, so "load more" re-fetches with a larger
+/* the API has no offset parameter, so paging re-fetches with a larger
    limit and re-renders the whole (larger) result set */
-function fetchFeatures(qv, limit, onOk){
+function fetchFeatures(qv, limit, layer, onOk){
+  if(typeof layer === 'function'){ onOk = layer; layer = null; }
   if(ctrl) ctrl.abort();
   ctrl = new AbortController();
-  return fetch(API + '?query=' + encodeURIComponent(qv) + '&limit=' + limit, {signal: ctrl.signal})
+  var url = API + '?query=' + encodeURIComponent(qv) + '&limit=' + limit;
+  if(layer) url += '&layer=' + encodeURIComponent(layer);
+  return fetch(url, {signal: ctrl.signal})
     .then(function(r){
       if(!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
@@ -292,14 +388,97 @@ function fetchFeatures(qv, limit, onOk){
     .then(function(data){ onOk(data.features || []); });
 }
 
-function updateMore(){
-  if(currentQuery && mayHaveMore){
-    moreWrap.hidden = false;
-    moreBtn.disabled = false;
-    moreBtn.textContent = 'Load ' + Math.min(PAGE, MAXLIMIT - shown) + ' more results';
-  } else {
-    moreWrap.hidden = true;
+/* ----- type filters (checkboxes per layer_name seen in the results) ----- */
+var TYPE_ORDER = ['Commune', 'Localit\u00E9', 'Adresse', 'lieu_dit', 'nom_de_rue', 'Parcelle', 'FLIK', 'hydro', 'hydro_km', 'biotope', 'asta_esp'];
+function typeRank(t){
+  var i = TYPE_ORDER.indexOf(t);
+  return i >= 0 ? i : 100;
+}
+function collectTypes(feats){
+  feats.forEach(function(f){
+    var t = (f.properties && f.properties.layer_name) || '';
+    if(t && knownTypes.indexOf(t) < 0){
+      knownTypes.push(t);
+      if(enabled[t] === undefined) enabled[t] = true;
+    }
+  });
+  knownTypes.sort(function(a, b){
+    var d = typeRank(a) - typeRank(b);
+    return d !== 0 ? d : a.localeCompare(b);
+  });
+  rebuildFilters();
+}
+function rebuildFilters(){
+  if(!knownTypes.length){ filterWrap.hidden = true; return; }
+  filterWrap.hidden = false;
+  filterBox.innerHTML = '';
+  knownTypes.forEach(function(t){
+    var lab = document.createElement('label');
+    lab.className = 'fchip';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = enabled[t] !== false;
+    cb.addEventListener('change', function(){
+      enabled[t] = cb.checked;
+      clearTimeout(ftimer);
+      ftimer = setTimeout(function(){ doFetch(limitTarget, false); }, 400);
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(t));
+    filterBox.appendChild(lab);
+  });
+}
+function enabledList(){
+  return knownTypes.filter(function(t){ return enabled[t] !== false; });
+}
+
+function updateButtons(){
+  var canMore = mayHaveMore;
+  var canAll = !!currentQuery && limitTarget < MAXLIMIT && fetchedCount >= limitTarget;
+  moreWrap.hidden = !(currentQuery && (canMore || canAll));
+  moreBtn.hidden = !canMore;
+  allBtn.hidden = !canAll;
+  moreBtn.disabled = allBtn.disabled = busy;
+  moreBtn.textContent = 'Load ' + Math.min(PAGE, MAXLIMIT - limitTarget) + ' more';
+  allBtn.textContent = 'Load all (up to ' + MAXLIMIT + ')';
+}
+
+function doFetch(limit, fit){
+  if(!currentQuery) return;
+  var on = enabledList();
+  if(knownTypes.length && !on.length){
+    limitTarget = limit;
+    fetchedCount = 0;
+    mayHaveMore = false;
+    render([], currentQuery, fit);
+    setStatus('All types are hidden \u2014 tick at least one type filter to show results.');
+    updateButtons();
+    return;
   }
+  busy = true;
+  updateButtons();
+  setStatus('Searching\u2026');
+  /* when some types are unticked, pass the wanted ones via the layer
+     parameter so the limit is spent on them; a client-side filter in
+     render() guards against the API ignoring it */
+  var layer = (knownTypes.length && on.length < knownTypes.length) ? on.join(',') : null;
+  fetchFeatures(currentQuery, limit, layer, function(feats){
+    busy = false;
+    limitTarget = limit;
+    fetchedCount = feats.length;
+    collectTypes(feats);
+    render(feats, currentQuery, fit);
+    mayHaveMore = feats.length >= limit && feats.length < MAXLIMIT;
+    updateButtons();
+  }).catch(function(e){
+    busy = false;
+    if(e && e.name === 'AbortError') return;
+    source.clear();
+    listEl.innerHTML = '';
+    items = [];
+    setStatus('Search failed: ' + (e && e.message ? e.message : e), true);
+    updateButtons();
+  });
 }
 
 function run(query){
@@ -308,41 +487,22 @@ function run(query){
     setStatus('Type at least 2 characters.');
     return;
   }
-  moreWrap.hidden = true;
-  setStatus('Searching\u2026');
-  fetchFeatures(qv, PAGE, function(feats){
-    currentQuery = qv;
-    render(feats, qv, true);
-    shown = feats.length;
-    mayHaveMore = feats.length >= PAGE && feats.length < MAXLIMIT;
-    updateMore();
-  }).catch(function(e){
-    if(e && e.name === 'AbortError') return;
-    source.clear();
-    listEl.innerHTML = '';
-    items = [];
-    currentQuery = '';
-    setStatus('Search failed: ' + (e && e.message ? e.message : e), true);
-  });
+  currentQuery = qv;
+  doFetch(PAGE, true);
 }
 
 function loadMore(){
-  if(!currentQuery || moreBtn.disabled) return;
-  var newLimit = Math.min(shown + PAGE, MAXLIMIT);
-  moreBtn.disabled = true;
-  moreBtn.textContent = 'Loading\u2026';
-  fetchFeatures(currentQuery, newLimit, function(feats){
-    render(feats, currentQuery, false);
-    shown = feats.length;
-    mayHaveMore = feats.length >= newLimit && feats.length < MAXLIMIT;
-    updateMore();
-  }).catch(function(e){
-    if(e && e.name === 'AbortError') return;
-    setStatus('Could not load more results: ' + (e && e.message ? e.message : e), true);
-    updateMore();
-  });
+  if(!currentQuery || busy) return;
+  doFetch(Math.min(limitTarget + PAGE, MAXLIMIT), false);
 }
+
+function loadAll(){
+  if(!currentQuery || busy) return;
+  doFetch(MAXLIMIT, false);
+}
+
 moreBtn.addEventListener('click', loadMore);
+allBtn.addEventListener('click', loadAll);
 
 var timer = null;
 qEl.addEventListener('input', function(){
