@@ -42,6 +42,9 @@
       { path: 'goobi/cungs-goobi-mets-viewer.html', label: 'METS viewer', desc: 'Extracts event notes from METS/MODS files and exports table, DwC Event Core or Excel.' },
       { path: 'goobi/cungs-goobi-image-viewer.html', label: 'Image viewer', desc: 'Page-by-page viewer for the Cungs notebooks: zoomable scans with the events and taxa of each page.' },
       { path: 'goobi/digiento-viewer.html', label: 'Specimen browser', desc: 'Browse boxes and specimens from face.mnhn.gov.lu.' }
+    ]},
+    { folder: 'geoportail', tools: [
+      { path: 'geoportail/search-map.html', label: 'Search map', desc: 'Geoportail full-text search: the top 10 proposals are listed and all plotted on the geoportail basemap — hover a result to highlight its marker.' }
     ]}
   ];
   var PAGES = [{ path: 'index.html', label: 'Overview', desc: 'Tools and pages published in this repository via GitHub Pages.' }]
@@ -55,7 +58,8 @@
     'data.public/MNHNL_dataPublic_dashboard.html': ['body>h1', 'body>.subtitle'],
     'goobi/cungs-goobi-mets-viewer.html': ['main>header.hdr'],
     'goobi/cungs-goobi-image-viewer.html': ['main>header.hdr'],
-    'goobi/digiento-viewer.html': ['body>header h1']
+    'goobi/digiento-viewer.html': ['body>header h1'],
+    'geoportail/search-map.html': ['main>header.hdr']
   };
 
   var CARET = '<svg class="pt-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
