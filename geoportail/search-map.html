@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Full-text place search on the Luxembourg geoportail API: results are listed and all plotted at once on the geoportail basemap — filter by type (Adresse, lieu_dit, …), load more or all, hover to highlight, click to zoom and copy the WGS84 coordinates.">
+<meta name="description" content="Full-text place search on the Luxembourg geoportail API: results are listed and all plotted at once on the geoportail basemap — filter by type (Adresse, lieu_dit, …), load more or all, hover to highlight, click to zoom and copy the WGS84 coordinates; right-click the map to copy any point's coordinates.">
 <title>Geoportail search map</title>
 <link rel="stylesheet" href="../assets/theme.css">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
@@ -52,8 +52,12 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 #selTxt b{display:block;font-size:13px;overflow-wrap:anywhere}
 #selTxt .coords{color:var(--mut)}
 #selBar button{padding:6px 10px;font-size:12.5px;flex:none}
+#selBar select{padding:5px 7px;font-size:12px;flex:none}
 #selClose{background:transparent;color:var(--mut);border:1px solid var(--bd)}
-#moreWrap[hidden],#selBar[hidden],#filterWrap[hidden]{display:none}
+#ctxMenu{position:absolute;z-index:30;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);padding:4px;min-width:210px}
+#ctxMenu button{background:transparent;color:var(--fg);border:0;text-align:left;font-family:var(--mono);font-size:12px;padding:6px 8px;white-space:nowrap;cursor:pointer}
+#ctxMenu button:hover{background:var(--ac2)}
+#moreWrap[hidden],#selBar[hidden],#filterWrap[hidden],#ctxMenu[hidden]{display:none}
 @media (max-width:880px){
   #app{grid-template-columns:1fr;grid-template-rows:minmax(170px,42%) minmax(0,1fr)}
   #side{border-right:0;border-bottom:1px solid var(--bd)}
@@ -65,7 +69,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
   <header class="hdr">
     <div>
       <h1>Geoportail search map</h1>
-      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates.</p>
+      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates. Right-click anywhere on the map to copy that point&rsquo;s coordinates.</p>
     </div>
   </header>
   <div id="app">
@@ -93,8 +97,18 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
     <div id="map">
       <div id="selBar" hidden>
         <div id="selTxt"></div>
-        <button id="copyBtn" type="button">Copy WGS84</button>
+        <select id="fmtSel" aria-label="Coordinate format">
+          <option value="deg">49.88103° N, 5.94500° E</option>
+          <option value="plain">49.88103N, 5.94500E</option>
+          <option value="tab">49.88103⇥5.94500 (tab, Excel)</option>
+        </select>
+        <button id="copyBtn" type="button">Copy</button>
         <button id="selClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div id="ctxMenu" hidden>
+        <button type="button" data-fmt="deg"></button>
+        <button type="button" data-fmt="plain"></button>
+        <button type="button" data-fmt="tab"></button>
       </div>
     </div>
   </div>
@@ -122,6 +136,8 @@ var selBar = document.getElementById('selBar');
 var selTxt = document.getElementById('selTxt');
 var copyBtn = document.getElementById('copyBtn');
 var selClose = document.getElementById('selClose');
+var fmtSel = document.getElementById('fmtSel');
+var ctxMenu = document.getElementById('ctxMenu');
 var limitTarget = PAGE;  /* limit used by the last fetch */
 var fetchedCount = 0;    /* features returned by the last fetch */
 var currentQuery = '';
@@ -223,12 +239,18 @@ function select(i){
   showSel(i);
 }
 
-/* WGS84 coordinates as "xxxxx.xxxxx° N, xxxxx.xxxxx° E" */
-function fmtWGS84(ll){
+/* WGS84 coordinate copy formats for a [lon, lat] pair:
+   deg:   "49.88103° N, 5.94500° E"
+   plain: "49.88103N, 5.94500E"
+   tab:   "49.88103\t5.94500"  (lat <TAB> lon, for pasting into two Excel columns) */
+function fmtCoord(ll, fmt){
   var lat = ll[1], lon = ll[0];
-  return Math.abs(lat).toFixed(5) + '° ' + (lat >= 0 ? 'N' : 'S') + ', ' +
-         Math.abs(lon).toFixed(5) + '° ' + (lon >= 0 ? 'E' : 'W');
+  var ns = lat >= 0 ? 'N' : 'S', ew = lon >= 0 ? 'E' : 'W';
+  if(fmt === 'plain') return Math.abs(lat).toFixed(5) + ns + ', ' + Math.abs(lon).toFixed(5) + ew;
+  if(fmt === 'tab') return lat.toFixed(5) + '\t' + lon.toFixed(5);
+  return Math.abs(lat).toFixed(5) + '° ' + ns + ', ' + Math.abs(lon).toFixed(5) + '° ' + ew;
 }
+function fmtWGS84(ll){ return fmtCoord(ll, 'deg'); }
 
 function showSel(i){
   var it = items[i];
@@ -268,12 +290,61 @@ function copyText(text, cb){
 
 copyBtn.addEventListener('click', function(){
   if(selIdx < 0 || !items[selIdx]) return;
-  copyText(fmtWGS84(items[selIdx].ll), function(ok){
+  copyText(fmtCoord(items[selIdx].ll, fmtSel.value), function(ok){
     copyBtn.textContent = ok ? 'Copied!' : 'Copy failed';
-    setTimeout(function(){ copyBtn.textContent = 'Copy WGS84'; }, 1500);
+    setTimeout(function(){ copyBtn.textContent = 'Copy'; }, 1500);
   });
 });
 selClose.addEventListener('click', hideSel);
+
+/* ----- right-click context menu on the map: copy any point's coordinates ----- */
+function hideCtx(){ ctxMenu.hidden = true; }
+
+function openCtx(pixel, ll){
+  var btns = ctxMenu.querySelectorAll('button');
+  for(var i = 0; i < btns.length; i++){
+    var raw = fmtCoord(ll, btns[i].getAttribute('data-fmt'));
+    btns[i].setAttribute('data-raw', raw);
+    btns[i].textContent = raw.replace(/\t/g, '⇥');
+  }
+  ctxMenu.hidden = false;
+  var size = map.getSize();
+  var x = pixel[0], y = pixel[1];
+  if(size){
+    if(x + ctxMenu.offsetWidth > size[0]) x = Math.max(0, size[0] - ctxMenu.offsetWidth - 4);
+    if(y + ctxMenu.offsetHeight > size[1]) y = Math.max(0, size[1] - ctxMenu.offsetHeight - 4);
+  }
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top = y + 'px';
+}
+
+(function(){
+  var btns = ctxMenu.querySelectorAll('button');
+  for(var i = 0; i < btns.length; i++){
+    btns[i].addEventListener('click', function(){
+      var btn = this;
+      copyText(btn.getAttribute('data-raw'), function(ok){
+        btn.textContent = ok ? 'Copied!' : 'Copy failed';
+        setTimeout(hideCtx, 700);
+      });
+    });
+  }
+})();
+
+map.on('contextmenu', function(e){
+  if(e.originalEvent && e.originalEvent.preventDefault) e.originalEvent.preventDefault();
+  try { e.preventDefault(); } catch(err){}
+  var ll = ol.proj.toLonLat(map.getEventCoordinate(e.originalEvent));
+  openCtx(e.pixel, ll);
+});
+/* make sure the browser's own context menu never appears over the map */
+map.getViewport().addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
+document.addEventListener('pointerdown', function(ev){
+  if(!ctxMenu.hidden && !ctxMenu.contains(ev.target)) hideCtx();
+});
+document.addEventListener('keydown', function(ev){
+  if(ev.key === 'Escape') hideCtx();
+});
 
 var gj = new ol.format.GeoJSON();
 
@@ -520,6 +591,7 @@ bgEl.addEventListener('change', function(){
 });
 
 map.on('click', function(e){
+  hideCtx();
   var hit = null;
   map.forEachFeatureAtPixel(e.pixel, function(f){ hit = f; return true; }, {layerFilter: function(l){ return l === resultLayer; }});
   if(hit){
