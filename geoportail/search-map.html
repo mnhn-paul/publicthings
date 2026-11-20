@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Full-text place search on the Luxembourg geoportail API: results are listed and all plotted at once on the geoportail basemap — filter by type (Adresse, lieu_dit, …), load more or all, hover to highlight, click to zoom and copy the WGS84 coordinates; right-click the map to copy any point's coordinates.">
+<meta name="description" content="Full-text place search on the Luxembourg geoportail API: results are listed and all plotted at once on the geoportail basemap — filter by type, load more or all, hover to highlight, click to zoom and copy the WGS84 coordinates, save locations for the session and download them as CSV; right-click the map to copy, save or circle any point.">
 <title>Geoportail search map</title>
 <link rel="stylesheet" href="../assets/theme.css">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
@@ -59,7 +59,16 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 #ctxMenu button:hover{background:var(--ac2)}
 #ctxMenu hr{border:0;border-top:1px solid var(--bd);margin:4px 2px}
 #ctxMenu button.txt{font-family:var(--sans);font-size:12.5px;font-weight:600}
-#moreWrap[hidden],#selBar[hidden],#filterWrap[hidden],#ctxMenu[hidden]{display:none}
+#moreWrap[hidden],#selBar[hidden],#filterWrap[hidden],#ctxMenu[hidden],#savedWrap[hidden]{display:none}
+button.sm{padding:5px 10px;font-size:12px;background:transparent;color:var(--ac);border:1px solid var(--bd)}
+button.sm:hover{background:var(--ac2)}
+#savedWrap{border-top:1px solid var(--bd)}
+.savedHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 16px 4px;font-size:13px;flex-wrap:wrap}
+.savedBtns{display:flex;gap:6px}
+#savedList{list-style:none;margin:0;padding:4px 8px 8px;max-height:150px;overflow-y:auto}
+#savedList li{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border:1px solid transparent;border-radius:var(--radius-sm);cursor:pointer}
+#savedList li:hover{background:var(--ac2);border-color:var(--ac)}
+#savedList .save,#results li .save{margin-left:auto;flex:none}
 /* basemap switcher, injected into the map as an ol control (top right) */
 .ol-bgctl{top:.5em;right:.5em;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);border-radius:var(--radius-sm);padding:3px 6px}
 .ol-bgctl select{border:0;background:transparent;color:var(--fg);font:600 12.5px var(--sans);padding:3px 4px;cursor:pointer;max-width:180px}
@@ -74,7 +83,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
   <header class="hdr">
     <div>
       <h1>Geoportail search map</h1>
-      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates. Right-click anywhere on the map to copy that point&rsquo;s coordinates or to draw an accuracy circle (the radius snaps to round values like 10/25/50/100/250/500 m and is added to the copied values).</p>
+      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates. Right-click anywhere on the map to copy that point&rsquo;s coordinates or to draw an accuracy circle (the radius snaps to round values like 10/25/50/100/250/500 m and is added to the copied values). Save locations (results or right-clicked points) for this session and download them as CSV.</p>
     </div>
   </header>
   <div id="app">
@@ -88,6 +97,16 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
       <div id="status">Type at least 2 characters.</div>
       <div id="filterWrap" hidden><div id="filters"></div></div>
       <ol id="results"></ol>
+      <div id="savedWrap" hidden>
+        <div class="savedHead">
+          <b>Saved locations (<span id="savedCount">0</span>)</b>
+          <span class="savedBtns">
+            <button id="dlBtn" type="button" class="sm">Download CSV</button>
+            <button id="clearSavedBtn" type="button" class="sm">Clear saved</button>
+          </span>
+        </div>
+        <ul id="savedList"></ul>
+      </div>
       <div id="moreWrap" hidden>
         <button id="more" type="button">Load more results</button>
         <button id="all" type="button">Load all results</button>
@@ -102,6 +121,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
           <option value="tab">49.88103⇥5.94500 (tab, Excel)</option>
         </select>
         <button id="copyBtn" type="button">Copy</button>
+        <button id="saveSelBtn" type="button">Save</button>
         <button id="selClose" type="button" aria-label="Close">&times;</button>
       </div>
       <div id="ctxMenu" hidden>
@@ -110,6 +130,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
         <button type="button" class="cfmt" data-fmt="tab"></button>
         <hr>
         <button type="button" id="drawBtn" class="txt">Draw radius circle from this point</button>
+        <button type="button" id="savePtBtn" class="txt">Save this point</button>
         <button type="button" id="clearBtn" class="txt" hidden>Clear circle</button>
       </div>
     </div>
@@ -139,6 +160,13 @@ var copyBtn = document.getElementById('copyBtn');
 var selClose = document.getElementById('selClose');
 var fmtSel = document.getElementById('fmtSel');
 var ctxMenu = document.getElementById('ctxMenu');
+var savedWrap = document.getElementById('savedWrap');
+var savedList = document.getElementById('savedList');
+var savedCount = document.getElementById('savedCount');
+var dlBtn = document.getElementById('dlBtn');
+var clearSavedBtn = document.getElementById('clearSavedBtn');
+var saveSelBtn = document.getElementById('saveSelBtn');
+var savePtBtn = document.getElementById('savePtBtn');
 var limitTarget = PAGE;  /* limit used by the last fetch */
 var fetchedCount = 0;    /* features returned by the last fetch */
 var currentQuery = '';
@@ -154,6 +182,8 @@ var committed = null;   /* {origin, ll, radius} of the kept circle */
 var ctxCoord = null;    /* EPSG:3857 coordinate of the last right-click */
 var ctxLl = null;       /* lon/lat of the last right-click */
 var activeLl = null;    /* lon/lat currently shown in the selection bar */
+var SAVED_KEY = 'publicthings.geoportail.saved.v1';
+var saved = [];         /* [{name, ll:[lon,lat], layerName, radius}] — session only */
 
 var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -244,12 +274,40 @@ var circleLayer = new ol.layer.Vector({
 var draftSource = new ol.source.Vector();
 var draftLayer = new ol.layer.Vector({source: draftSource, zIndex: 7});
 
+/* saved locations (green numbered markers, optional radius circle) */
+var savedSource = new ol.source.Vector();
+var savedLayer = new ol.layer.Vector({
+  source: savedSource,
+  zIndex: 8,
+  style: function(f){
+    if(f.get('kind') === 'savedCircle'){
+      return new ol.style.Style({
+        fill: new ol.style.Fill({color: 'rgba(153,204,153,.18)'}),
+        stroke: new ol.style.Stroke({color: '#5B8863', width: 2, lineDash: [6, 4]})
+      });
+    }
+    return new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 9,
+        fill: new ol.style.Fill({color: '#99CC99'}),
+        stroke: new ol.style.Stroke({color: '#001C26', width: 2})
+      }),
+      text: new ol.style.Text({
+        text: String(f.get('rank')),
+        font: '700 11px Inter, system-ui, sans-serif',
+        fill: new ol.style.Fill({color: '#001C26'}),
+        textBaseline: 'middle'
+      })
+    });
+  }
+});
+
 var center = ol.proj.fromLonLat([6.1296, 49.6116]);
 var lo = ol.proj.fromLonLat([5.70, 49.40]);
 var hi = ol.proj.fromLonLat([6.55, 50.19]);
 var map = new ol.Map({
   target: 'map',
-  layers: [baseLayer, resultLayer, ctxLayer, circleLayer, draftLayer],
+  layers: [baseLayer, resultLayer, ctxLayer, circleLayer, draftLayer, savedLayer],
   view: new ol.View({
     center: center,
     zoom: 8,
@@ -626,6 +684,16 @@ function render(features, query, fit){
     li.addEventListener('focus', function(){ setHl(i, true); });
     li.addEventListener('blur', function(){ setHl(i, false); });
     li.addEventListener('click', function(){ select(i); });
+    var sb = document.createElement('button');
+    sb.type = 'button';
+    sb.className = 'sm save';
+    sb.textContent = 'Save';
+    sb.title = 'Save this location (this session)';
+    sb.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      saveLocation(label, ll, layerName, null);
+    });
+    li.appendChild(sb);
     listEl.appendChild(li);
     items.push({marker: marker, area: area, li: li, ll: ll, label: label, layerName: layerName});
   });
@@ -772,6 +840,130 @@ function loadAll(){
 moreBtn.addEventListener('click', loadMore);
 allBtn.addEventListener('click', loadAll);
 
+/* ----- saved locations (sessionStorage) + CSV download ----- */
+function persistSaved(){
+  try {
+    if(saved.length) sessionStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+    else sessionStorage.removeItem(SAVED_KEY);
+  } catch(e){}
+}
+function loadSaved(){
+  try {
+    var raw = sessionStorage.getItem(SAVED_KEY);
+    if(raw){
+      var a = JSON.parse(raw);
+      if(Array.isArray(a)){
+        saved = a.filter(function(s){ return s && Array.isArray(s.ll) && s.ll.length === 2 && isFinite(s.ll[0]) && isFinite(s.ll[1]); });
+      }
+    }
+  } catch(e){}
+}
+function sameLl(a, b){
+  return Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
+}
+function saveLocation(name, ll, layerName, r){
+  for(var i = 0; i < saved.length; i++){
+    if(sameLl(saved[i].ll, ll)){
+      saved[i].name = name;
+      saved[i].layerName = layerName || saved[i].layerName;
+      saved[i].radius = r || null;
+      renderSaved();
+      setStatus('Updated saved location: ' + name + ' (' + saved.length + ' saved).');
+      return;
+    }
+  }
+  saved.push({name: name, ll: [ll[0], ll[1]], layerName: layerName || '', radius: r || null});
+  renderSaved();
+  setStatus('Saved: ' + name + ' (' + saved.length + ' saved).');
+}
+function removeSaved(i){
+  var s = saved.splice(i, 1)[0];
+  renderSaved();
+  setStatus('Removed: ' + (s ? s.name : '') + ' (' + saved.length + ' saved).');
+}
+function renderSaved(){
+  savedSource.clear();
+  savedList.innerHTML = '';
+  saved.forEach(function(s, i){
+    var coord = ol.proj.fromLonLat(s.ll);
+    if(s.radius){
+      var c = new ol.Feature({geometry: new ol.geom.Circle(coord, s.radius / Math.cos(s.ll[1] * Math.PI / 180))});
+      c.set('kind', 'savedCircle');
+      savedSource.addFeature(c);
+    }
+    var f = new ol.Feature({geometry: new ol.geom.Point(coord)});
+    f.set('kind', 'saved');
+    f.set('rank', i + 1);
+    savedSource.addFeature(f);
+    var li = document.createElement('li');
+    li.tabIndex = 0;
+    li.innerHTML =
+      '<span class="rank">' + (i + 1) + '</span>' +
+      '<span class="lbl"><b>' + esc(s.name) + '</b>' +
+      '<span class="meta">' +
+      '<span class="coords">' + fmtCoord(s.ll, 'deg', null) + '</span>' +
+      (s.radius ? '<span class="chip">r=' + s.radius + ' m</span>' : '') +
+      (s.layerName ? '<span class="chip">' + esc(s.layerName) + '</span>' : '') +
+      '</span></span>';
+    li.addEventListener('click', function(){
+      map.getView().animate({center: coord, zoom: 15, duration: 450});
+    });
+    var rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'sm save';
+    rm.textContent = '×';
+    rm.title = 'Remove from saved';
+    rm.addEventListener('click', function(ev){ ev.stopPropagation(); removeSaved(i); });
+    li.appendChild(rm);
+    savedList.appendChild(li);
+  });
+  savedWrap.hidden = saved.length === 0;
+  savedCount.textContent = saved.length;
+  persistSaved();
+}
+
+saveSelBtn.addEventListener('click', function(){
+  if(selIdx < 0 || !items[selIdx]) return;
+  var it = items[selIdx];
+  saveLocation(it.label, it.ll, it.layerName, null);
+});
+savePtBtn.addEventListener('click', function(){
+  if(!ctxLl) return;
+  var r = (committed && sameLl(committed.ll, ctxLl)) ? committed.radius : null;
+  saveLocation('Map point ' + ctxLl[1].toFixed(5) + ', ' + ctxLl[0].toFixed(5), ctxLl, 'map point', r);
+  hideCtx();
+});
+clearSavedBtn.addEventListener('click', function(){
+  saved = [];
+  renderSaved();
+  setStatus('Saved locations cleared.');
+});
+dlBtn.addEventListener('click', function(){
+  if(!saved.length){ setStatus('Nothing saved yet.', true); return; }
+  var rows = [['name', 'latitude', 'longitude', 'radius_m']];
+  saved.forEach(function(s){
+    rows.push([s.name, s.ll[1].toFixed(6), s.ll[0].toFixed(6), s.radius != null ? String(s.radius) : '']);
+  });
+  /* BOM so Excel reads UTF-8; quote fields containing separators/quotes */
+  var csv = '\uFEFF' + rows.map(function(r){
+    return r.map(function(c){
+      c = String(c);
+      return /[",\n\r]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c;
+    }).join(',');
+  }).join('\r\n');
+  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  var d = new Date();
+  var pad = function(n){ return ('0' + n).slice(-2); };
+  a.href = URL.createObjectURL(blob);
+  a.download = 'geoportail-saved-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+    '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  setStatus('Downloaded ' + saved.length + ' saved location(s) as CSV.');
+});
+
 var timer = null;
 qEl.addEventListener('input', function(){
   clearTimeout(timer);
@@ -805,6 +997,8 @@ map.on('pointermove', function(e){
   items.forEach(function(it, i){ setHl(i, i === idx); });
 });
 
+loadSaved();
+renderSaved();
 run('Wangen');
 })();
 </script>
