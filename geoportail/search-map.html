@@ -57,6 +57,8 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 #ctxMenu{position:absolute;z-index:30;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);padding:4px;min-width:210px}
 #ctxMenu button{background:transparent;color:var(--fg);border:0;text-align:left;font-family:var(--mono);font-size:12px;padding:6px 8px;white-space:nowrap;cursor:pointer}
 #ctxMenu button:hover{background:var(--ac2)}
+#ctxMenu hr{border:0;border-top:1px solid var(--bd);margin:4px 2px}
+#ctxMenu button.txt{font-family:var(--sans);font-size:12.5px;font-weight:600}
 #moreWrap[hidden],#selBar[hidden],#filterWrap[hidden],#ctxMenu[hidden]{display:none}
 /* basemap switcher, injected into the map as an ol control (top right) */
 .ol-bgctl{top:.5em;right:.5em;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);border-radius:var(--radius-sm);padding:3px 6px}
@@ -72,7 +74,7 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
   <header class="hdr">
     <div>
       <h1>Geoportail search map</h1>
-      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates. Right-click anywhere on the map to copy that point&rsquo;s coordinates.</p>
+      <p class="sub">Type a place name (e.g. &ldquo;Wangen&rdquo;): the geoportail full-text search returns its best proposals as a list, and every one of them is plotted on the geoportail basemap at once. Tick the type filters to hide kinds of results, use &ldquo;Load more&rdquo;/&ldquo;Load all&rdquo; for additional hits, hover a list entry to highlight its marker, and click one to zoom to it and copy its WGS84 coordinates. Right-click anywhere on the map to copy that point&rsquo;s coordinates or to draw an accuracy circle (the radius snaps to round values like 10/25/50/100/250/500 m and is added to the copied values).</p>
     </div>
   </header>
   <div id="app">
@@ -103,9 +105,12 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
         <button id="selClose" type="button" aria-label="Close">&times;</button>
       </div>
       <div id="ctxMenu" hidden>
-        <button type="button" data-fmt="deg"></button>
-        <button type="button" data-fmt="plain"></button>
-        <button type="button" data-fmt="tab"></button>
+        <button type="button" class="cfmt" data-fmt="deg"></button>
+        <button type="button" class="cfmt" data-fmt="plain"></button>
+        <button type="button" class="cfmt" data-fmt="tab"></button>
+        <hr>
+        <button type="button" id="drawBtn" class="txt">Draw radius circle from this point</button>
+        <button type="button" id="clearBtn" class="txt" hidden>Clear circle</button>
       </div>
     </div>
   </div>
@@ -143,6 +148,12 @@ var knownTypes = [];     /* layer names seen so far, for the type filters */
 var enabled = {};        /* layer name -> checkbox state */
 var ftimer = null;
 var selIdx = -1;
+var radius = null;      /* committed radius in meters (null = none) */
+var radiusMode = null;  /* {origin, originLl, radius} while drawing a radius */
+var committed = null;   /* {origin, ll, radius} of the kept circle */
+var ctxCoord = null;    /* EPSG:3857 coordinate of the last right-click */
+var ctxLl = null;       /* lon/lat of the last right-click */
+var activeLl = null;    /* lon/lat currently shown in the selection bar */
 
 var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -209,24 +220,36 @@ var resultLayer = new ol.layer.Vector({source: source, zIndex: 5, style: functio
 
 /* temporary marker for right-clicked points on the map */
 var ctxSource = new ol.source.Vector();
-var ctxLayer = new ol.layer.Vector({
-  source: ctxSource,
-  zIndex: 6,
-  style: new ol.style.Style({
-    image: new ol.style.Circle({
-      radius: 8,
-      fill: new ol.style.Fill({color: 'rgba(255,205,0,.55)'}),
-      stroke: new ol.style.Stroke({color: '#E40134', width: 2.5})
-    })
+var ctxPointStyle = new ol.style.Style({
+  image: new ol.style.Circle({
+    radius: 8,
+    fill: new ol.style.Fill({color: 'rgba(255,205,0,.55)'}),
+    stroke: new ol.style.Stroke({color: '#E40134', width: 2.5})
   })
 });
+var ctxLayer = new ol.layer.Vector({source: ctxSource, zIndex: 6, style: ctxPointStyle});
+
+/* committed accuracy circle (radius) around a right-clicked point */
+var circleSource = new ol.source.Vector();
+var circleLayer = new ol.layer.Vector({
+  source: circleSource,
+  zIndex: 6,
+  style: new ol.style.Style({
+    fill: new ol.style.Fill({color: 'rgba(228,1,52,.10)'}),
+    stroke: new ol.style.Stroke({color: '#E40134', width: 2, lineDash: [6, 4]})
+  })
+});
+
+/* live circle while the radius is being drawn */
+var draftSource = new ol.source.Vector();
+var draftLayer = new ol.layer.Vector({source: draftSource, zIndex: 7});
 
 var center = ol.proj.fromLonLat([6.1296, 49.6116]);
 var lo = ol.proj.fromLonLat([5.70, 49.40]);
 var hi = ol.proj.fromLonLat([6.55, 50.19]);
 var map = new ol.Map({
   target: 'map',
-  layers: [baseLayer, resultLayer, ctxLayer],
+  layers: [baseLayer, resultLayer, ctxLayer, circleLayer, draftLayer],
   view: new ol.View({
     center: center,
     zoom: 8,
@@ -283,33 +306,56 @@ function select(i){
   showSel(i);
 }
 
-/* WGS84 coordinate copy formats for a [lon, lat] pair:
-   deg:   "49.88103° N, 5.94500° E"
-   plain: "49.88103N, 5.94500E"
-   tab:   "49.88103\t5.94500"  (lat <TAB> lon, for pasting into two Excel columns) */
-function fmtCoord(ll, fmt){
+/* WGS84 coordinate copy formats for a [lon, lat] pair. When a radius r (meters)
+   is set, it is appended as an extra element (3rd tab column for Excel):
+   deg:   "49.88103° N, 5.94500° E, r=500 m"
+   plain: "49.88103N, 5.94500E, r=500 m"
+   tab:   "49.88103\t5.94500\t500"  (lat <TAB> lon <TAB> radius m) */
+function fmtCoord(ll, fmt, r){
   var lat = ll[1], lon = ll[0];
   var ns = lat >= 0 ? 'N' : 'S', ew = lon >= 0 ? 'E' : 'W';
-  if(fmt === 'plain') return Math.abs(lat).toFixed(5) + ns + ', ' + Math.abs(lon).toFixed(5) + ew;
-  if(fmt === 'tab') return lat.toFixed(5) + '\t' + lon.toFixed(5);
-  return Math.abs(lat).toFixed(5) + '° ' + ns + ', ' + Math.abs(lon).toFixed(5) + '° ' + ew;
+  var core;
+  if(fmt === 'plain') core = Math.abs(lat).toFixed(5) + ns + ', ' + Math.abs(lon).toFixed(5) + ew;
+  else if(fmt === 'tab') core = lat.toFixed(5) + '\t' + lon.toFixed(5);
+  else core = Math.abs(lat).toFixed(5) + '° ' + ns + ', ' + Math.abs(lon).toFixed(5) + '° ' + ew;
+  if(r != null && r > 0){
+    return fmt === 'tab' ? core + '\t' + r : core + ', r=' + r + ' m';
+  }
+  return core;
 }
-function fmtWGS84(ll){ return fmtCoord(ll, 'deg'); }
+function fmtRadius(r){ return r >= 1000 ? (r / 1000) + ' km' : r + ' m'; }
+
+/* round radius values the drawn circle snaps to (1-2-5 series, meters) */
+var SNAPS = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+function snapRadius(m){
+  var best = SNAPS[0];
+  for(var i = 1; i < SNAPS.length; i++){
+    if(Math.abs(SNAPS[i] - m) < Math.abs(best - m)) best = SNAPS[i];
+  }
+  return best;
+}
 
 function showSel(i){
   var it = items[i];
   if(!it) return;
   selIdx = i;
+  activeLl = it.ll;
   selTxt.innerHTML = '<b>' + esc(it.label) + '</b>' +
-    '<span class="coords">' + fmtWGS84(it.ll) + ' (WGS84)' +
+    '<span class="coords">' + fmtCoord(it.ll, 'deg', radius) + ' (WGS84)' +
     (it.layerName ? ' · ' + esc(it.layerName) : '') + '</span>';
-  /* show the selected item's actual coordinates in every format option */
+  updateFmtOptions(it.ll);
+  selBar.hidden = false;
+}
+
+/* (re)write the format dropdown labels with the given point's actual
+   coordinates in every format, including the radius when one is set */
+function updateFmtOptions(ll){
+  if(!ll) return;
   for(var k = 0; k < fmtSel.options.length; k++){
     var o = fmtSel.options[k];
-    o.textContent = fmtCoord(it.ll, o.value).replace(/\t/g, '⇥') +
+    o.textContent = fmtCoord(ll, o.value, radius).replace(/\t/g, '⇥') +
       (o.value === 'tab' ? ' (tab, Excel)' : '');
   }
-  selBar.hidden = false;
 }
 
 function hideSel(){
@@ -340,7 +386,7 @@ function copyText(text, cb){
 
 copyBtn.addEventListener('click', function(){
   if(selIdx < 0 || !items[selIdx]) return;
-  copyText(fmtCoord(items[selIdx].ll, fmtSel.value), function(ok){
+  copyText(fmtCoord(items[selIdx].ll, fmtSel.value, radius), function(ok){
     copyBtn.textContent = ok ? 'Copied!' : 'Copy failed';
     setTimeout(function(){ copyBtn.textContent = 'Copy'; }, 1500);
   });
@@ -351,12 +397,16 @@ selClose.addEventListener('click', hideSel);
 function hideCtx(){ ctxMenu.hidden = true; }
 
 function openCtx(pixel, ll){
-  var btns = ctxMenu.querySelectorAll('button');
+  ctxCoord = map.getCoordinateFromPixel(pixel);
+  ctxLl = ll;
+  var btns = ctxMenu.querySelectorAll('button.cfmt');
   for(var i = 0; i < btns.length; i++){
-    var raw = fmtCoord(ll, btns[i].getAttribute('data-fmt'));
+    var raw = fmtCoord(ll, btns[i].getAttribute('data-fmt'), radius);
     btns[i].setAttribute('data-raw', raw);
     btns[i].textContent = raw.replace(/\t/g, '⇥');
   }
+  clearBtn.hidden = radius == null;
+  if(radius != null) clearBtn.textContent = 'Clear circle (r=' + radius + ' m)';
   ctxMenu.hidden = false;
   var size = map.getSize();
   var x = pixel[0], y = pixel[1];
@@ -368,8 +418,11 @@ function openCtx(pixel, ll){
   ctxMenu.style.top = y + 'px';
 }
 
+var drawBtn = document.getElementById('drawBtn');
+var clearBtn = document.getElementById('clearBtn');
+
 (function(){
-  var btns = ctxMenu.querySelectorAll('button');
+  var btns = ctxMenu.querySelectorAll('button.cfmt');
   for(var i = 0; i < btns.length; i++){
     btns[i].addEventListener('click', function(){
       var btn = this;
@@ -381,15 +434,97 @@ function openCtx(pixel, ll){
   }
 })();
 
+drawBtn.addEventListener('click', function(){
+  if(!ctxCoord) return;
+  startRadiusMode(ctxCoord, ctxLl);
+  hideCtx();
+});
+clearBtn.addEventListener('click', function(){
+  clearCommitted();
+  hideCtx();
+  setStatus('Circle cleared.');
+});
+
 var ctxTimer = null;
 function clearCtxPoint(){
   ctxSource.clear();
   if(ctxTimer){ clearTimeout(ctxTimer); ctxTimer = null; }
 }
 
+/* ----- radius / accuracy circle drawn from a right-clicked point ----- */
+function startRadiusMode(coord, ll){
+  radiusMode = {origin: coord, originLl: ll, radius: null};
+  setStatus('Radius mode: move the mouse to size the circle (snaps to 1/2/5/10/25/50/100/250/500 m…), click to keep it, Esc to cancel.');
+}
+function updateRadiusDraft(e){
+  var ll = ol.proj.toLonLat(map.getEventCoordinate(e.originalEvent));
+  var d = ol.sphere.getDistance(radiusMode.originLl, ll);
+  var r = snapRadius(d);
+  radiusMode.radius = r;
+  draftSource.clear();
+  /* EPSG:3857 stretches ground distances by 1/cos(lat) */
+  var mapR = r / Math.cos(radiusMode.originLl[1] * Math.PI / 180);
+  draftSource.addFeature(new ol.Feature({geometry: new ol.geom.Circle(radiusMode.origin, mapR)}));
+  var lbl = new ol.Feature({geometry: new ol.geom.Point(radiusMode.origin)});
+  lbl.setStyle(new ol.style.Style({
+    text: new ol.style.Text({
+      text: fmtRadius(r),
+      font: '700 12px Inter, system-ui, sans-serif',
+      fill: new ol.style.Fill({color: '#E40134'}),
+      stroke: new ol.style.Stroke({color: '#FFFFFF', width: 3}),
+      offsetY: -14
+    })
+  }));
+  draftSource.addFeature(lbl);
+  map.getTargetElement().style.cursor = 'crosshair';
+  setStatus('Radius: ' + fmtRadius(r) + ' — click to keep this circle, Esc to cancel.');
+}
+function commitRadius(){
+  var r = radiusMode.radius;
+  var origin = radiusMode.origin, ll = radiusMode.originLl;
+  radiusMode = null;
+  draftSource.clear();
+  map.getTargetElement().style.cursor = '';
+  if(!r || r <= 0){ setStatus('Radius cancelled.'); return; }
+  circleSource.clear();
+  var mapR = r / Math.cos(ll[1] * Math.PI / 180);
+  circleSource.addFeature(new ol.Feature({geometry: new ol.geom.Circle(origin, mapR)}));
+  var lbl = new ol.Feature({geometry: new ol.geom.Point(origin)});
+  lbl.setStyle(new ol.style.Style({
+    text: new ol.style.Text({
+      text: fmtRadius(r),
+      font: '700 12px Inter, system-ui, sans-serif',
+      fill: new ol.style.Fill({color: '#E40134'}),
+      stroke: new ol.style.Stroke({color: '#FFFFFF', width: 3}),
+      offsetY: -14
+    })
+  }));
+  circleSource.addFeature(lbl);
+  committed = {origin: origin, ll: ll, radius: r};
+  radius = r;
+  if(activeLl) updateFmtOptions(activeLl);
+  setStatus('Circle kept: radius ' + fmtRadius(r) + ' around ' + fmtCoord(ll, 'deg', null) +
+    '. Right-click to copy (radius included) or clear the circle.');
+  openCtx(map.getPixelFromCoordinate(origin), ll);
+}
+function clearCommitted(){
+  committed = null;
+  radius = null;
+  circleSource.clear();
+  if(activeLl) updateFmtOptions(activeLl);
+}
+function resetCtx(){
+  radiusMode = null;
+  draftSource.clear();
+  clearCommitted();
+  clearCtxPoint();
+  hideCtx();
+}
+
 map.on('contextmenu', function(e){
   if(e.originalEvent && e.originalEvent.preventDefault) e.originalEvent.preventDefault();
   try { e.preventDefault(); } catch(err){}
+  if(radiusMode){ radiusMode = null; draftSource.clear(); }
   var coord = map.getEventCoordinate(e.originalEvent);
   var ll = ol.proj.toLonLat(coord);
   openCtx(e.pixel, ll);
@@ -405,7 +540,7 @@ document.addEventListener('pointerdown', function(ev){
   if(!ctxMenu.hidden && !ctxMenu.contains(ev.target)) hideCtx();
 });
 document.addEventListener('keydown', function(ev){
-  if(ev.key === 'Escape'){ hideCtx(); clearCtxPoint(); }
+  if(ev.key === 'Escape'){ resetCtx(); }
 });
 
 var gj = new ol.format.GeoJSON();
@@ -649,6 +784,7 @@ form.addEventListener('submit', function(e){
 });
 
 map.on('click', function(e){
+  if(radiusMode){ commitRadius(); return; }
   hideCtx();
   clearCtxPoint();
   var hit = null;
@@ -662,6 +798,7 @@ map.on('click', function(e){
 });
 
 map.on('pointermove', function(e){
+  if(radiusMode){ updateRadiusDraft(e); return; }
   var hit = map.forEachFeatureAtPixel(e.pixel, function(f){ return f; }, {layerFilter: function(l){ return l === resultLayer; }});
   map.getTargetElement().style.cursor = hit ? 'pointer' : '';
   var idx = hit ? hit.get('idx') : -1;
