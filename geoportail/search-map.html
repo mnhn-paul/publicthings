@@ -58,6 +58,9 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
 #ctxMenu button{background:transparent;color:var(--fg);border:0;text-align:left;font-family:var(--mono);font-size:12px;padding:6px 8px;white-space:nowrap;cursor:pointer}
 #ctxMenu button:hover{background:var(--ac2)}
 #moreWrap[hidden],#selBar[hidden],#filterWrap[hidden],#ctxMenu[hidden]{display:none}
+/* basemap switcher, injected into the map as an ol control (top right) */
+.ol-bgctl{top:.5em;right:.5em;background:var(--card);border:1px solid var(--bd);box-shadow:var(--sh);border-radius:var(--radius-sm);padding:3px 6px}
+.ol-bgctl select{border:0;background:transparent;color:var(--fg);font:600 12.5px var(--sans);padding:3px 4px;cursor:pointer;max-width:180px}
 @media (max-width:880px){
   #app{grid-template-columns:1fr;grid-template-rows:minmax(170px,42%) minmax(0,1fr)}
   #side{border-right:0;border-bottom:1px solid var(--bd)}
@@ -77,12 +80,6 @@ select{padding:7px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm)
       <div class="search">
         <form id="f"><input id="q" type="search" placeholder='Search a place, e.g. "Wangen"&hellip;' autocomplete="off" aria-label="Place search"></form>
         <div class="row">
-          <label for="bg">Basemap</label>
-          <select id="bg">
-            <option value="basemap" selected>basemap (geoportail)</option>
-            <option value="topomap">topomap</option>
-            <option value="roadmap">roadmap</option>
-          </select>
           <button type="submit" form="f">Search</button>
         </div>
       </div>
@@ -126,7 +123,6 @@ var form = document.getElementById('f');
 var qEl = document.getElementById('q');
 var statusEl = document.getElementById('status');
 var listEl = document.getElementById('results');
-var bgEl = document.getElementById('bg');
 var moreWrap = document.getElementById('moreWrap');
 var moreBtn = document.getElementById('more');
 var allBtn = document.getElementById('all');
@@ -162,13 +158,14 @@ function tileUrlFunction(layer){
   };
 }
 
-var baseLayer = new ol.layer.Tile({
-  source: new ol.source.XYZ({
-    tileUrlFunction: tileUrlFunction('basemap'),
+function makeBaseSource(layer){
+  return new ol.source.XYZ({
+    tileUrlFunction: tileUrlFunction(layer),
     maxZoom: 19,
     attributions: 'Basemap &copy; <a href="https://geoportail.lu" target="_blank" rel="noopener">geoportail.lu</a> &mdash; Administration du cadastre et de la topographie, Grand-Duch&eacute; de Luxembourg'
-  })
-});
+  });
+}
+var baseLayer = new ol.layer.Tile({source: makeBaseSource('basemap')});
 
 function styleFor(f){
   var hl = !!f.get('hl');
@@ -196,12 +193,26 @@ function styleFor(f){
 var source = new ol.source.Vector();
 var resultLayer = new ol.layer.Vector({source: source, zIndex: 5, style: function(f){ return styleFor(f); }});
 
+/* temporary marker for right-clicked points on the map */
+var ctxSource = new ol.source.Vector();
+var ctxLayer = new ol.layer.Vector({
+  source: ctxSource,
+  zIndex: 6,
+  style: new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 8,
+      fill: new ol.style.Fill({color: 'rgba(255,205,0,.55)'}),
+      stroke: new ol.style.Stroke({color: '#E40134', width: 2.5})
+    })
+  })
+});
+
 var center = ol.proj.fromLonLat([6.1296, 49.6116]);
 var lo = ol.proj.fromLonLat([5.70, 49.40]);
 var hi = ol.proj.fromLonLat([6.55, 50.19]);
 var map = new ol.Map({
   target: 'map',
-  layers: [baseLayer, resultLayer],
+  layers: [baseLayer, resultLayer, ctxLayer],
   view: new ol.View({
     center: center,
     zoom: 8,
@@ -210,6 +221,25 @@ var map = new ol.Map({
     extent: [lo[0], lo[1], hi[0], hi[1]]
   })
 });
+
+/* basemap switcher as a control inside the map (top right) */
+var bgSel = document.createElement('select');
+bgSel.setAttribute('aria-label', 'Basemap');
+[['basemap', 'basemap (geoportail)'], ['topomap', 'topomap'], ['roadmap', 'roadmap']].forEach(function(o){
+  var opt = document.createElement('option');
+  opt.value = o[0];
+  opt.textContent = o[1];
+  if(o[0] === 'basemap') opt.selected = true;
+  bgSel.appendChild(opt);
+});
+bgSel.addEventListener('change', function(){
+  baseLayer.setSource(makeBaseSource(bgSel.value));
+});
+var bgWrap = document.createElement('div');
+bgWrap.className = 'ol-control ol-top ol-right ol-bgctl';
+bgWrap.title = 'Basemap';
+bgWrap.appendChild(bgSel);
+map.addControl(new ol.control.Control({element: bgWrap}));
 
 var items = [];
 var ctrl = null;
@@ -259,6 +289,12 @@ function showSel(i){
   selTxt.innerHTML = '<b>' + esc(it.label) + '</b>' +
     '<span class="coords">' + fmtWGS84(it.ll) + ' (WGS84)' +
     (it.layerName ? ' · ' + esc(it.layerName) : '') + '</span>';
+  /* show the selected item's actual coordinates in every format option */
+  for(var k = 0; k < fmtSel.options.length; k++){
+    var o = fmtSel.options[k];
+    o.textContent = fmtCoord(it.ll, o.value).replace(/\t/g, '⇥') +
+      (o.value === 'tab' ? ' (tab, Excel)' : '');
+  }
   selBar.hidden = false;
 }
 
@@ -331,11 +367,23 @@ function openCtx(pixel, ll){
   }
 })();
 
+var ctxTimer = null;
+function clearCtxPoint(){
+  ctxSource.clear();
+  if(ctxTimer){ clearTimeout(ctxTimer); ctxTimer = null; }
+}
+
 map.on('contextmenu', function(e){
   if(e.originalEvent && e.originalEvent.preventDefault) e.originalEvent.preventDefault();
   try { e.preventDefault(); } catch(err){}
-  var ll = ol.proj.toLonLat(map.getEventCoordinate(e.originalEvent));
+  var coord = map.getEventCoordinate(e.originalEvent);
+  var ll = ol.proj.toLonLat(coord);
   openCtx(e.pixel, ll);
+  /* temporarily mark the right-clicked point (auto-clears after 12 s) */
+  ctxSource.clear();
+  ctxSource.addFeature(new ol.Feature({geometry: new ol.geom.Point(coord)}));
+  if(ctxTimer) clearTimeout(ctxTimer);
+  ctxTimer = setTimeout(clearCtxPoint, 12000);
 });
 /* make sure the browser's own context menu never appears over the map */
 map.getViewport().addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
@@ -343,7 +391,7 @@ document.addEventListener('pointerdown', function(ev){
   if(!ctxMenu.hidden && !ctxMenu.contains(ev.target)) hideCtx();
 });
 document.addEventListener('keydown', function(ev){
-  if(ev.key === 'Escape') hideCtx();
+  if(ev.key === 'Escape'){ hideCtx(); clearCtxPoint(); }
 });
 
 var gj = new ol.format.GeoJSON();
@@ -586,12 +634,9 @@ form.addEventListener('submit', function(e){
   run(qEl.value);
 });
 
-bgEl.addEventListener('change', function(){
-  baseLayer.getSource().setTileUrlFunction(tileUrlFunction(bgEl.value));
-});
-
 map.on('click', function(e){
   hideCtx();
+  clearCtxPoint();
   var hit = null;
   map.forEachFeatureAtPixel(e.pixel, function(f){ hit = f; return true; }, {layerFilter: function(l){ return l === resultLayer; }});
   if(hit){
