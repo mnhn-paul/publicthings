@@ -176,7 +176,6 @@ var knownTypes = [];     /* layer names seen so far, for the type filters */
 var enabled = {};        /* layer name -> checkbox state */
 var ftimer = null;
 var selIdx = -1;
-var radius = null;      /* committed radius in meters (null = none) */
 var radiusMode = null;  /* {origin, originLl, radius} while drawing a radius */
 var committed = null;   /* {origin, ll, radius} of the kept circle */
 var ctxCoord = null;    /* EPSG:3857 coordinate of the last right-click */
@@ -184,6 +183,12 @@ var ctxLl = null;       /* lon/lat of the last right-click */
 var activeLl = null;    /* lon/lat currently shown in the selection bar */
 var SAVED_KEY = 'publicthings.geoportail.saved.v1';
 var saved = [];         /* [{name, ll:[lon,lat], layerName, radius}] — session only */
+
+/* the radius that applies to a given point: only the committed circle's own
+   origin carries it — never leak it onto other selected/copied points */
+function radiusFor(ll){
+  return (committed && sameLl(committed.ll, ll)) ? committed.radius : null;
+}
 
 var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -399,7 +404,7 @@ function showSel(i){
   selIdx = i;
   activeLl = it.ll;
   selTxt.innerHTML = '<b>' + esc(it.label) + '</b>' +
-    '<span class="coords">' + fmtCoord(it.ll, 'deg', radius) + ' (WGS84)' +
+    '<span class="coords">' + fmtCoord(it.ll, 'deg', radiusFor(it.ll)) + ' (WGS84)' +
     (it.layerName ? ' · ' + esc(it.layerName) : '') + '</span>';
   updateFmtOptions(it.ll);
   selBar.hidden = false;
@@ -411,7 +416,7 @@ function updateFmtOptions(ll){
   if(!ll) return;
   for(var k = 0; k < fmtSel.options.length; k++){
     var o = fmtSel.options[k];
-    o.textContent = fmtCoord(ll, o.value, radius).replace(/\t/g, '⇥') +
+    o.textContent = fmtCoord(ll, o.value, radiusFor(ll)).replace(/\t/g, '⇥') +
       (o.value === 'tab' ? ' (tab, Excel)' : '');
   }
 }
@@ -444,7 +449,7 @@ function copyText(text, cb){
 
 copyBtn.addEventListener('click', function(){
   if(selIdx < 0 || !items[selIdx]) return;
-  copyText(fmtCoord(items[selIdx].ll, fmtSel.value, radius), function(ok){
+  copyText(fmtCoord(items[selIdx].ll, fmtSel.value, radiusFor(items[selIdx].ll)), function(ok){
     copyBtn.textContent = ok ? 'Copied!' : 'Copy failed';
     setTimeout(function(){ copyBtn.textContent = 'Copy'; }, 1500);
   });
@@ -459,12 +464,12 @@ function openCtx(pixel, ll){
   ctxLl = ll;
   var btns = ctxMenu.querySelectorAll('button.cfmt');
   for(var i = 0; i < btns.length; i++){
-    var raw = fmtCoord(ll, btns[i].getAttribute('data-fmt'), radius);
+    var raw = fmtCoord(ll, btns[i].getAttribute('data-fmt'), radiusFor(ll));
     btns[i].setAttribute('data-raw', raw);
     btns[i].textContent = raw.replace(/\t/g, '⇥');
   }
-  clearBtn.hidden = radius == null;
-  if(radius != null) clearBtn.textContent = 'Clear circle (r=' + radius + ' m)';
+  clearBtn.hidden = !committed;
+  if(committed) clearBtn.textContent = 'Clear circle (r=' + committed.radius + ' m)';
   ctxMenu.hidden = false;
   var size = map.getSize();
   var x = pixel[0], y = pixel[1];
@@ -559,7 +564,6 @@ function commitRadius(){
   }));
   circleSource.addFeature(lbl);
   committed = {origin: origin, ll: ll, radius: r};
-  radius = r;
   if(activeLl) updateFmtOptions(activeLl);
   setStatus('Circle kept: radius ' + fmtRadius(r) + ' around ' + fmtCoord(ll, 'deg', null) +
     '. Right-click to copy (radius included) or clear the circle.');
@@ -567,16 +571,8 @@ function commitRadius(){
 }
 function clearCommitted(){
   committed = null;
-  radius = null;
   circleSource.clear();
   if(activeLl) updateFmtOptions(activeLl);
-}
-function resetCtx(){
-  radiusMode = null;
-  draftSource.clear();
-  clearCommitted();
-  clearCtxPoint();
-  hideCtx();
 }
 
 map.on('contextmenu', function(e){
@@ -598,7 +594,14 @@ document.addEventListener('pointerdown', function(ev){
   if(!ctxMenu.hidden && !ctxMenu.contains(ev.target)) hideCtx();
 });
 document.addEventListener('keydown', function(ev){
-  if(ev.key === 'Escape'){ resetCtx(); }
+  if(ev.key !== 'Escape') return;
+  /* don't hijack Escape while typing in a form field */
+  if(ev.target && ev.target.tagName && /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) return;
+  /* Escape cancels a radius being drawn and closes the menu/temp point;
+     a committed circle is only removed via its 'Clear circle' button */
+  if(radiusMode){ radiusMode = null; draftSource.clear(); map.getTargetElement().style.cursor = ''; }
+  clearCtxPoint();
+  hideCtx();
 });
 
 var gj = new ol.format.GeoJSON();
@@ -691,7 +694,7 @@ function render(features, query, fit){
     sb.title = 'Save this location (this session)';
     sb.addEventListener('click', function(ev){
       ev.stopPropagation();
-      saveLocation(label, ll, layerName, null);
+      saveLocation(label, ll, layerName, radiusFor(ll));
     });
     li.appendChild(sb);
     listEl.appendChild(li);
@@ -779,8 +782,10 @@ function updateButtons(){
   allBtn.textContent = 'Load all (up to ' + MAXLIMIT + ')';
 }
 
+var reqSeq = 0;   /* guards against out-of-order fetch responses */
 function doFetch(limit, fit){
   if(!currentQuery) return;
+  var mySeq = ++reqSeq;
   var on = enabledList();
   if(knownTypes.length && !on.length){
     limitTarget = limit;
@@ -799,6 +804,7 @@ function doFetch(limit, fit){
      render() guards against the API ignoring it */
   var layer = (knownTypes.length && on.length < knownTypes.length) ? on.join(',') : null;
   fetchFeatures(currentQuery, limit, layer, function(feats){
+    if(mySeq !== reqSeq) return;   /* a newer fetch superseded this one */
     busy = false;
     limitTarget = limit;
     fetchedCount = feats.length;
@@ -807,6 +813,7 @@ function doFetch(limit, fit){
     mayHaveMore = feats.length >= limit && feats.length < MAXLIMIT;
     updateButtons();
   }).catch(function(e){
+    if(mySeq !== reqSeq) return;
     busy = false;
     if(e && e.name === 'AbortError') return;
     source.clear();
@@ -925,12 +932,11 @@ function renderSaved(){
 saveSelBtn.addEventListener('click', function(){
   if(selIdx < 0 || !items[selIdx]) return;
   var it = items[selIdx];
-  saveLocation(it.label, it.ll, it.layerName, null);
+  saveLocation(it.label, it.ll, it.layerName, radiusFor(it.ll));
 });
 savePtBtn.addEventListener('click', function(){
   if(!ctxLl) return;
-  var r = (committed && sameLl(committed.ll, ctxLl)) ? committed.radius : null;
-  saveLocation('Map point ' + ctxLl[1].toFixed(5) + ', ' + ctxLl[0].toFixed(5), ctxLl, 'map point', r);
+  saveLocation('Map point ' + ctxLl[1].toFixed(5) + ', ' + ctxLl[0].toFixed(5), ctxLl, 'map point', radiusFor(ctxLl));
   hideCtx();
 });
 clearSavedBtn.addEventListener('click', function(){
