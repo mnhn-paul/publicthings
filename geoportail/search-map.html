@@ -148,24 +148,38 @@ var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, func
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
 }); };
 
-/* geoportail WMTS (KVP GetTile) — tile matrix set GLOBAL_WEBMERCATOR is the
-   standard WebMercatorQuad grid, so a plain XYZ source works */
-function tileUrlFunction(layer){
+/* geoportail WMTS (KVP GetTile). Both tile matrix sets are the standard
+   WebMercatorQuad grid (origin -20037508.34, 256 px tiles, halving scales) —
+   only the matrix identifiers are zero-padded two-digit strings, and the
+   ortho layers use GLOBAL_WEBMERCATOR_4_V3 — so a plain XYZ source works */
+var BASEMAPS = [
+  {value: 'basemap',      label: 'basemap (geoportail)',  tms: 'GLOBAL_WEBMERCATOR',     fmt: 'image/png',  maxZoom: 19},
+  {value: 'topomap',      label: 'topomap',               tms: 'GLOBAL_WEBMERCATOR',     fmt: 'image/png',  maxZoom: 19},
+  {value: 'roadmap',      label: 'roadmap',               tms: 'GLOBAL_WEBMERCATOR',     fmt: 'image/png',  maxZoom: 19},
+  {value: 'ortho_latest', label: 'orthomap (latest)',     tms: 'GLOBAL_WEBMERCATOR_4_V3', fmt: 'image/jpeg', maxZoom: 21},
+  {value: 'hybrid',       label: 'hybrid (ortho+labels)', tms: 'GLOBAL_WEBMERCATOR_4_V3', fmt: 'image/png',  maxZoom: 21}
+];
+function basemapByValue(v){
+  for(var i = 0; i < BASEMAPS.length; i++) if(BASEMAPS[i].value === v) return BASEMAPS[i];
+  return BASEMAPS[0];
+}
+function tileUrlFunction(bm){
   return function(c){
-    return WMTS + '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + layer +
-      '&STYLE=default&TILEMATRIXSET=GLOBAL_WEBMERCATOR&TILEMATRIX=' + c[0] +
-      '&TILECOL=' + c[1] + '&TILEROW=' + c[2] + '&FORMAT=image/png';
+    var z = ('0' + c[0]).slice(-2);
+    return WMTS + '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + bm.value +
+      '&STYLE=default&TILEMATRIXSET=' + bm.tms + '&TILEMATRIX=' + z +
+      '&TILECOL=' + c[1] + '&TILEROW=' + c[2] + '&FORMAT=' + bm.fmt;
   };
 }
 
-function makeBaseSource(layer){
+function makeBaseSource(bm){
   return new ol.source.XYZ({
-    tileUrlFunction: tileUrlFunction(layer),
-    maxZoom: 19,
+    tileUrlFunction: tileUrlFunction(bm),
+    maxZoom: bm.maxZoom,
     attributions: 'Basemap &copy; <a href="https://geoportail.lu" target="_blank" rel="noopener">geoportail.lu</a> &mdash; Administration du cadastre et de la topographie, Grand-Duch&eacute; de Luxembourg'
   });
 }
-var baseLayer = new ol.layer.Tile({source: makeBaseSource('basemap')});
+var baseLayer = new ol.layer.Tile({source: makeBaseSource(basemapByValue('basemap'))});
 
 function styleFor(f){
   var hl = !!f.get('hl');
@@ -225,15 +239,15 @@ var map = new ol.Map({
 /* basemap switcher as a control inside the map (top right) */
 var bgSel = document.createElement('select');
 bgSel.setAttribute('aria-label', 'Basemap');
-[['basemap', 'basemap (geoportail)'], ['topomap', 'topomap'], ['roadmap', 'roadmap']].forEach(function(o){
+BASEMAPS.forEach(function(bm, i){
   var opt = document.createElement('option');
-  opt.value = o[0];
-  opt.textContent = o[1];
-  if(o[0] === 'basemap') opt.selected = true;
+  opt.value = bm.value;
+  opt.textContent = bm.label;
+  if(i === 0) opt.selected = true;
   bgSel.appendChild(opt);
 });
 bgSel.addEventListener('change', function(){
-  baseLayer.setSource(makeBaseSource(bgSel.value));
+  baseLayer.setSource(makeBaseSource(basemapByValue(bgSel.value)));
 });
 var bgWrap = document.createElement('div');
 bgWrap.className = 'ol-control ol-top ol-right ol-bgctl';
